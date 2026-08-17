@@ -65,8 +65,11 @@ async function fetchResponses() {
         const response = await axios.get(
             `${process.env.FE2_BASE_URL}/rest/api/v2/alarms/${activeAlarm.alarmId}/responses`,
             {
+                auth: {
+                    username: process.env.FE2_ALARM_USER,
+                    password: process.env.FE2_ALARM_PASSWORD
+                },
                 headers: {
-                    'Authorization': `Bearer ${process.env.FE2_API_KEY}`,
                     'Accept': 'application/json'
                 }
             }
@@ -75,7 +78,7 @@ async function fetchResponses() {
         activeAlarm.responses = response.data || [];
         console.log(`Rückmeldungen aktualisiert (${activeAlarm.responses.length} Personen)`);
     } catch (error) {
-        console.error('Fehler beim Abrufen der Rückmeldungen von FE2:', error.message);
+        console.error('Fehler beim Abrufen der Rückmeldungen von FE2:', error.response ? error.response.data : error.message);
     }
 }
 
