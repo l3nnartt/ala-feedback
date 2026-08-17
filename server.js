@@ -15,14 +15,13 @@ let activeAlarm = {
 
 let pollInterval = null;
 
-// 1. webhook listen
+// 1. Webhook Empfänger
 app.post('/api/webhook/alarm', (req, res) => {
-    // auth - param
+    // Auth - Parameter Check
     if (req.query.token !== process.env.WEBHOOK_SECRET) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // FE2 übergibt die Einsatz-/Alarm-ID im Body (z.B. req.body.alarmId oder req.body.id)
     const alarmId = req.body.alarmId || req.body.id || req.body.alarm_id;
 
     if (!alarmId) {
@@ -31,24 +30,23 @@ app.post('/api/webhook/alarm', (req, res) => {
 
     console.log(`Neuer Alarm empfangen! ID: ${alarmId}`);
     
-    // Aktiven Alarm setzen
     activeAlarm = {
         alarmId: alarmId,
         startedAt: Date.now(),
         responses: []
     };
 
-    // Stoppe evtl. laufendes Polling
     if (pollInterval) clearInterval(pollInterval);
 
-    // Sofort abrufen und dann alle 30 Sekunden
+    // Sofort abrufen
     fetchResponses();
 
+    // 15 Minuten Lang alle 30 Sekunden abrufen
     const FIFTEEN_MINUTES = 15 * 60 * 1000;
     pollInterval = setInterval(() => {
         const elapsed = Date.now() - activeAlarm.startedAt;
         if (elapsed >= FIFTEEN_MINUTES) {
-            console.log('15 Minuten abgelaufen. Abfrage wird beendet.');
+            console.log('15 Minuten abgelaufen. Polling beendet.');
             clearInterval(pollInterval);
             pollInterval = null;
         } else {
@@ -59,7 +57,7 @@ app.post('/api/webhook/alarm', (req, res) => {
     res.json({ status: 'ok', alarmId: alarmId });
 });
 
-// Funktion zum Abrufen der rueckmeldung von FE2
+// Funktion zum Abrufen der Rückmeldungen von FE2
 async function fetchResponses() {
     if (!activeAlarm.alarmId) return;
 
@@ -81,8 +79,8 @@ async function fetchResponses() {
     }
 }
 
-// 2. API für die HTML-Anzeige im Feuerwehrhaus
-app.get('/api/current-alarm', (res) => {
+// 2. API für das FE-Display (BUGFIX: (req, res) statt nur (res))
+app.get('/api/current-alarm', (req, res) => {
     res.json(activeAlarm);
 });
 

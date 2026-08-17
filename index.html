@@ -9,6 +9,7 @@
             --bg-color: #121212;
             --card-bg: #1e1e1e;
             --text-color: #ffffff;
+            --yellow-color: #ffcc00;
             --red-color: #ff4d4d;
             --blue-color: #3399ff;
             --default-color: #2b2b2b;
@@ -76,6 +77,11 @@
         }
 
         /* Farbkennzeichnungen nach Tags */
+        .card.tag-yellow {
+            border-left-color: var(--yellow-color);
+            background-color: #2a2415;
+        }
+
         .card.tag-red {
             border-left-color: var(--red-color);
             background-color: #2a1515;
@@ -131,24 +137,26 @@
         Kein aktiver Einsatz
     </div>
 
-
     <script>
-        // we love js
-        // Definition der groups/funcitosn fuer die farbige Markierung
-        const YELLOW_TAGS = ['OrtsBM'];
-        const RED_TAGS = ['Zugführer'];
-        const BLUE_TAGS = ['Gruppenführer'];
+        // Definition der Schlüsselwörter für die farbige Markierung
+        const YELLOW_TAGS = ['OrtsBM', 'Ortsbrandmeister', 'Stv. OrtsBM'];
+        const RED_TAGS = ['Zugführer', 'ZF'];
+        const BLUE_TAGS = ['Gruppenführer', 'GF'];
 
         function getCardClass(tags) {
             if (!tags || !Array.isArray(tags)) return '';
             
             const lowerTags = tags.map(t => String(t).toLowerCase());
 
-            // check for red
+            // Priorität 1: Gelb (OrtsBM)
+            if (YELLOW_TAGS.some(yt => lowerTags.includes(yt.toLowerCase()))) {
+                return 'tag-yellow';
+            }
+            // Priorität 2: Rot (Zugführer)
             if (RED_TAGS.some(rt => lowerTags.includes(rt.toLowerCase()))) {
                 return 'tag-red';
             }
-            // check for blue
+            // Priorität 3: Blau (Gruppenführer)
             if (BLUE_TAGS.some(bt => lowerTags.includes(bt.toLowerCase()))) {
                 return 'tag-blue';
             }
@@ -167,7 +175,7 @@
                 const gridEl = document.getElementById('person-grid');
                 const countEl = document.getElementById('count');
 
-                if (!data.alarmId) {
+                if (!data || !data.alarmId) {
                     statusEl.textContent = 'Bereitschaft';
                     statusEl.classList.remove('status-active');
                     contentEl.style.display = 'none';
@@ -180,8 +188,7 @@
                 contentEl.style.display = 'block';
                 noAlarmEl.style.display = 'none';
 
-                // Nur Personen filtern, die zugesagt/kommend sind (z.B. feedbackType / response status)
-                // HINWEIS: Je nach FE2-Response Struktur anpassen (z.B. res.coming === true)
+                // Filterung: Nur Personen, die zugesagt haben
                 const comingPersons = (data.responses || []).filter(r => {
                     return r.coming === true || r.type === 'COME' || r.status === 'POSITIVE';
                 });
@@ -221,7 +228,7 @@
             }
         }
 
-        // Display alle 5 Sekunden lokal aktualisieren
+        // Display alle 5 Sekunden aktualisieren
         setInterval(updateDisplay, 5000);
         updateDisplay();
     </script>
