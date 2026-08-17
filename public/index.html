@@ -85,14 +85,16 @@
         .counter-container {
             display: flex;
             align-items: center;
-            gap: 15px;
-            font-size: 1.3rem;
+            gap: 12px;
+            font-size: 1.2rem;
             font-weight: 600;
+            flex-wrap: wrap;
         }
 
         .badge-yes { color: #4cd137; }
         .badge-no { color: #ff4d4d; }
         .badge-other { color: #fbc531; }
+        .special-stat { color: #00d2d3; margin-left: 10px; }
 
         .time-counter {
             font-size: 1.4rem;
@@ -119,7 +121,6 @@
             transition: transform 0.2s ease;
         }
 
-        /* Kachel-Hintergründe nach Status */
         .card.status-green {
             border-left-color: #4cd137;
             background-color: #112e12;
@@ -176,7 +177,6 @@
             gap: 5px;
         }
 
-        /* Farbige Funktions-Badges */
         .tag-badge {
             display: inline-block;
             padding: 3px 8px;
@@ -188,7 +188,7 @@
         .tag-yellow { background-color: #f57f17; color: #000; }
         .tag-red { background-color: #c62828; color: #fff; }
         .tag-blue { background-color: #1976d2; color: #fff; }
-        .tag-green { background-color: #2e7d32; color: #fff; }
+        /* AGT ist jetzt standardmäßig neutral wie Mannschaft/MA */
 
         .no-alarm {
             text-align: center;
@@ -197,7 +197,7 @@
             font-size: 1.8rem;
         }
 
-        @media (max-width: 850px) {
+        @media (max-width: 950px) {
             header { flex-direction: column; gap: 15px; text-align: center; }
             .logo-container { position: static; transform: none; margin: 5px 0; }
             h1 { font-size: 1.5rem; }
@@ -224,6 +224,9 @@
                 <span>Absagen: <strong id="count-no" class="badge-no">0</strong></span>
                 <span>|</span>
                 <span>Sonstige: <strong id="count-other" class="badge-other">0</strong></span>
+                <span class="special-stat">| AGT: <strong id="count-agt">0</strong></span>
+                <span class="special-stat">| MA: <strong id="count-ma">0</strong></span>
+                <span class="special-stat">| Kettensäge: <strong id="count-ks">0</strong></span>
             </div>
             <div class="time-counter" id="timer-container">Dauer: <span id="timer">00:00</span></div>
         </div>
@@ -243,14 +246,13 @@
             return 'status-yellow';
         }
 
-        // Bestimmt die Farbe für das jeweilige Funktions-Tag
+        // AGT verliert die Sonderfarbe und bleibt neutral (gibt '' zurück)
         function getTagClass(func) {
             const f = String(func).toLowerCase();
-            if (f.includes('ortsbm') || f.includes('ortbrandmeister')) return 'tag-yellow';
+            if (f.includes('ortsbm') || f.includes('ortsbrandmeister')) return 'tag-yellow';
             if (f.includes('zugführer') || f.includes('zf')) return 'tag-red';
             if (f.includes('gruppenführer') || f.includes('gf')) return 'tag-blue';
-            if (f.includes('agt') || f.includes('atk')) return 'tag-green';
-            return ''; // Standard Badge
+            return ''; 
         }
 
         setInterval(() => {
@@ -274,6 +276,9 @@
                 const countYesEl = document.getElementById('count-yes');
                 const countNoEl = document.getElementById('count-no');
                 const countOtherEl = document.getElementById('count-other');
+                const countAgtEl = document.getElementById('count-agt');
+                const countMaEl = document.getElementById('count-ma');
+                const countKsEl = document.getElementById('count-ks');
 
                 if (!data || !data.alarmId) {
                     statusEl.textContent = 'Bereitschaft';
@@ -298,19 +303,34 @@
                     return nameA.localeCompare(nameB);
                 });
 
-                let countYes = 0;
-                let countNo = 0;
-                let countOther = 0;
+                let countYes = 0, countNo = 0, countOther = 0;
+                let agtCount = 0, maCount = 0, ksCount = 0;
 
                 persons.forEach(p => {
-                    if (p.state === 'YES' || p.state === 'HERE') countYes++;
-                    else if (p.state === 'NO' || p.state === 'ABSENT') countNo++;
+                    const isYes = (p.state === 'YES' || p.state === 'HERE');
+                    const isNo = (p.state === 'NO' || p.state === 'ABSENT');
+
+                    if (isYes) countYes++;
+                    else if (isNo) countNo++;
                     else countOther++;
+
+                    // Spezial-Funktionen nur bei echten Zusagen zählen
+                    if (isYes && p.functions && Array.isArray(p.functions)) {
+                        p.functions.forEach(f => {
+                            const lower = String(f).toLowerCase();
+                            if (lower.includes('agt')) agtCount++;
+                            if (lower.includes('ma') || lower.includes('maschinist')) maCount++;
+                            if (lower.includes('kettensäge') || lower.includes('ks')) ksCount++;
+                        });
+                    }
                 });
 
                 countYesEl.textContent = countYes;
                 countNoEl.textContent = countNo;
                 countOtherEl.textContent = countOther;
+                countAgtEl.textContent = agtCount;
+                countMaEl.textContent = maCount;
+                countKsEl.textContent = ksCount;
 
                 gridEl.innerHTML = '';
 
