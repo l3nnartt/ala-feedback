@@ -13,6 +13,7 @@
             --red-color: #ff4d4d;
             --blue-color: #3399ff;
             --default-color: #2b2b2b;
+            --gray-color: #444;
         }
 
         body {
@@ -52,7 +53,6 @@
             color: #fff;
         }
 
-        /* Container für Zähler und Uhr */
         .info-bar {
             display: flex;
             justify-content: space-between;
@@ -94,20 +94,22 @@
             transition: transform 0.2s ease;
         }
 
-        /* Farbkennzeichnungen nach Funktionen */
-        .card.tag-yellow {
-            border-left-color: var(--yellow-color);
-            background-color: #2a2415;
+        /* Farbkennzeichnungen nach Funktionen (Priorität) */
+        .card.tag-yellow { border-left-color: var(--yellow-color); background-color: #2a2415; }
+        .card.tag-red { border-left-color: var(--red-color); background-color: #2a1515; }
+        .card.tag-blue { border-left-color: var(--blue-color); background-color: #122033; }
+
+        /* Ausgegraute Karten für Absagen / Abwesenheiten */
+        .card.card-inactive {
+            opacity: 0.35;
+            border-left-color: var(--gray-color) !important;
+            background-color: #1a1a1a !important;
         }
 
-        .card.tag-red {
-            border-left-color: var(--red-color);
-            background-color: #2a1515;
-        }
-
-        .card.tag-blue {
-            border-left-color: var(--blue-color);
-            background-color: #122033;
+        .name-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
         }
 
         .name {
@@ -115,6 +117,14 @@
             font-weight: bold;
             margin-bottom: 5px;
             color: #ffffff;
+        }
+
+        .state-tag {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.1);
+            text-transform: uppercase;
         }
 
         .tags {
@@ -139,27 +149,10 @@
             font-size: 1.8rem;
         }
 
-        /* Responsive Design für Smartphones & Tablets */
         @media (max-width: 650px) {
-            header {
-                flex-direction: column;
-                gap: 15px;
-                text-align: center;
-            }
-
-            h1 {
-                font-size: 1.5rem;
-            }
-
-            .info-bar {
-                flex-direction: column;
-                gap: 15px;
-                text-align: center;
-            }
-
-            .counter, .time-counter {
-                font-size: 1.2rem;
-            }
+            header, .info-bar { flex-direction: column; gap: 15px; text-align: center; }
+            h1 { font-size: 1.5rem; }
+            .counter, .time-counter { font-size: 1.2rem; }
         }
     </style>
 </head>
@@ -183,35 +176,38 @@
     </div>
 
     <script>
-        // Schlüsselwörter für die farbige Randmarkierung
         const YELLOW_TAGS = ['OrtsBM', 'Ortsbrandmeister', 'Stv. OrtsBM'];
         const RED_TAGS = ['Zugführer', 'ZF'];
         const BLUE_TAGS = ['Gruppenführer', 'GF'];
-        const WHITE_TAGS = ['Mannschaft', 'FM', 'OFM', 'HFM'];
 
         let alarmStartTime = null;
 
+        // Ermittelt die Priorität für die Sortierung (1 = Gelb, 2 = Rot, 3 = Blau, 4 = Mannschaft)
+        function getPriority(functions) {
+            if (!functions || !Array.isArray(functions)) return 4;
+            const lowerFuncs = functions.map(f => String(f).toLowerCase());
+
+            if (YELLOW_TAGS.some(yt => lowerFuncs.includes(yt.toLowerCase()))) return 1;
+            if (RED_TAGS.some(rt => lowerFuncs.includes(rt.toLowerCase()))) return 2;
+            if (BLUE_TAGS.some(bt => lowerFuncs.includes(bt.toLowerCase()))) return 3;
+            return 4;
+        }
+
         function getCardClass(functions) {
             if (!functions || !Array.isArray(functions)) return '';
-            
             const lowerFuncs = functions.map(f => String(f).toLowerCase());
 
             if (YELLOW_TAGS.some(yt => lowerFuncs.includes(yt.toLowerCase()))) return 'tag-yellow';
             if (RED_TAGS.some(rt => lowerFuncs.includes(rt.toLowerCase()))) return 'tag-red';
             if (BLUE_TAGS.some(bt => lowerFuncs.includes(bt.toLowerCase()))) return 'tag-blue';
-            if (WHITE_TAGS.some(wt => lowerFuncs.includes(wt.toLowerCase()))) return '';
-
             return '';
         }
 
-        // Stoppuhr-Logik (wird jede Sekunde ausgeführt)
         setInterval(() => {
             if (!alarmStartTime) return;
-            
             const elapsedSeconds = Math.floor((Date.now() - alarmStartTime) / 1000);
             const minutes = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
             const seconds = String(elapsedSeconds % 60).padStart(2, '0');
-            
             document.getElementById('timer').textContent = `${minutes}:${seconds}`;
         }, 1000);
 
@@ -226,52 +222,71 @@
                 const gridEl = document.getElementById('person-grid');
                 const countEl = document.getElementById('count');
 
-                // Wenn kein Alarm aktiv ist
                 if (!data || !data.alarmId) {
                     statusEl.textContent = 'Bereitschaft';
                     statusEl.classList.remove('status-active');
                     contentEl.style.display = 'none';
                     noAlarmEl.style.display = 'block';
-                    alarmStartTime = null; // Stoppuhr anhalten
+                    alarmStartTime = null;
                     return;
                 }
 
-                // Einsatz aktiv!
                 statusEl.textContent = 'EINSATZ AKTIV';
                 statusEl.classList.add('status-active');
                 contentEl.style.display = 'block';
                 noAlarmEl.style.display = 'none';
-                
-                // Startzeitpunkt für die Stoppuhr übernehmen
                 alarmStartTime = data.startedAt;
 
-                // Nur Personen filtern, die zugesagt haben ("state": "YES")
-                let comingPersons = (data.responses || []).filter(r => r.state === 'YES');
+                let persons = data.responses || [];
 
-                // Sortierung: Älteste Zusagen zuerst (chronologisch anhand von timeOfUpdate)
-                comingPersons.sort((a, b) => {
-                    const timeA = new Date(a.timeOfUpdate || 0).getTime();
-                    const timeB = new Date(b.timeOfUpdate || 0).getTime();
-                    
-                    return timeA - timeB; 
+                // Sortierung: 1. Nach Prio (Gelb -> Rot -> Blau -> Mannschaft), 2. Alphabetisch nach Name
+                persons.sort((a, b) => {
+                    const prioA = getPriority(a.functions);
+                    const prioB = getPriority(b.functions);
+
+                    if (prioA !== prioB) {
+                        return prioA - prioB;
+                    }
+
+                    // Gleiche Prio -> Alphabetisch nach Name
+                    const nameA = (a.name || '').toLowerCase();
+                    const nameB = (b.name || '').toLowerCase();
+                    return nameA.localeCompare(nameB);
                 });
 
-                countEl.textContent = comingPersons.length;
+                // Zähle nur echte Zusagen (YES oder HERE)
+                const activeCount = persons.filter(p => p.state === 'YES' || p.state === 'HERE').length;
+                countEl.textContent = activeCount;
                 gridEl.innerHTML = '';
 
-                comingPersons.forEach(person => {
+                persons.forEach(person => {
                     const card = document.createElement('div');
                     const functions = person.functions || [];
                     const colorClass = getCardClass(functions);
 
-                    card.className = `card ${colorClass}`;
+                    // Prüfen ob Absage oder Abwesenheit
+                    const isInactive = person.state === 'NO' || person.state === 'ABSENT';
+                    const inactiveClass = isInactive ? 'card-inactive' : '';
+
+                    card.className = `card ${colorClass} ${inactiveClass}`;
                     
+                    // Kopfzeile der Karte (Name + Status)
+                    const nameRow = document.createElement('div');
+                    nameRow.className = 'name-row';
+
                     const nameEl = document.createElement('div');
                     nameEl.className = 'name';
                     nameEl.textContent = person.name || 'Unbekannt';
-                    card.appendChild(nameEl);
+                    nameRow.appendChild(nameEl);
 
-                    // Qualifikationen / Funktionen anzeigen (z. B. AGT, MA)
+                    const stateBadge = document.createElement('div');
+                    stateBadge.className = 'state-tag';
+                    stateBadge.textContent = person.state || 'UNKNOWN';
+                    nameRow.appendChild(stateBadge);
+
+                    card.appendChild(nameRow);
+
+                    // Funktionen / Tags anzeigen
                     if (functions.length > 0) {
                         const tagsEl = document.createElement('div');
                         tagsEl.className = 'tags';
@@ -289,15 +304,10 @@
 
             } catch (err) {
                 console.error('Verbindungsfehler zum Server:', err);
-                
-                // Bei einem Verbindungsabbruch: 10 Sekunden warten und Seite neu laden
-                setTimeout(() => {
-                    location.reload();
-                }, 10000);
+                setTimeout(() => { location.reload(); }, 10000);
             }
         }
 
-        // Display alle 5 Sekunden aktualisieren
         setInterval(updateDisplay, 5000);
         updateDisplay();
     </script>
