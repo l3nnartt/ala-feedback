@@ -2,10 +2,29 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Hilfsfunktion zum gleichzeitigen Ausgeben in die Konsole und in die log.txt
+function writeLog(message, data = null) {
+    const timestamp = new Date().toISOString();
+    let logString = `[${timestamp}] ${message}`;
+    if (data !== null) {
+        logString += ` ${typeof data === 'object' ? JSON.stringify(data, null, 2) : data}`;
+    }
+    
+    console.log(logString);
+
+    try {
+        const logFilePath = path.join(__dirname, 'log.txt');
+        fs.appendFileSync(logFilePath, logString + '\n----------------------------------------\n');
+    } catch (err) {
+        console.error('Konnte nicht in log.txt schreiben:', err);
+    }
+}
 
 let activeAlarm = {
     alarmId: null,
@@ -16,20 +35,21 @@ let activeAlarm = {
 let pollInterval = null;
 let resetTimeout = null;
 
-// 1. Webhook Empfänger (Bestehend für FE2 API Alarmierung)
+// 1. Webhook Empfänger (FE2 API Alarmierung)
 app.post('/api/webhook/alarm', (req, res) => {
-    // Auth - Parameter Check
     if (req.query.token !== process.env.WEBHOOK_SECRET) {
+        writeLog('Unautorisierter Zugriffversuch auf /api/webhook/alarm');
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const alarmId = req.body.externalId || req.body.alarmId || req.body.id;
 
     if (!alarmId) {
+        writeLog('Keine externalId/alarmId im Webhook empfangen', req.body);
         return res.status(400).json({ error: 'Keine externalId/alarmId im Webhook empfangen' });
     }
 
-    console.log(`Neuer Alarm empfangen! ID: ${alarmId}`);
+    writeLog(`Neuer Alarm empfangen! ID: ${alarmId}`);
     
     activeAlarm = {
         alarmId: alarmId,
@@ -42,7 +62,6 @@ app.post('/api/webhook/alarm', (req, res) => {
 
     fetchResponses();
 
-    // Polling für 15 Minuten
     const FIFTEEN_MINUTES = 15 * 60 * 1000;
     pollInterval = setInterval(() => {
         const elapsed = Date.now() - activeAlarm.startedAt;
@@ -54,30 +73,39 @@ app.post('/api/webhook/alarm', (req, res) => {
         }
     }, 30000);
 
-    // Reset nach 30 Minuten
     const THIRTY_MINUTES = 30 * 60 * 1000;
     resetTimeout = setTimeout(() => {
+        writeLog('Alarm automatisch nach 30 Minuten zurückgesetzt.');
         activeAlarm = { alarmId: null, startedAt: null, responses: [] };
     }, THIRTY_MINUTES);
 
     res.json({ status: 'ok', alarmId: alarmId });
 });
 
-// ==========================================
-// 2. NEUER AMWEB WEBHOOK TEST-LISTENER
-// ==========================================
+// 2. AMweb Webhook Test-Listener
 app.post('/api/webhook/amweb-test', (req, res) => {
-    console.log("----------------------------------------");
-    console.log("🔔 AMWEB WEBHOOK EMPFANGEN UM:", new Date().toISOString());
-    console.log("Headers:", req.headers);
-    console.log("Body (Rohdaten von AMweb):", JSON.stringify(req.body, null, 2));
-    console.log("----------------------------------------");
+    writeLog("AMWEB WEBHOOK EMPFANGEN:", {
+        headers: req.headers,
+        body: req.body
+    });
 
-    // Dem AMweb eine erfolgreiche Antwort zurückgeben
     res.status(200).json({ success: true, message: "AMweb Webhook erfolgreich empfangen!" });
 });
 
-// Funktion zum Abrufen der Rückmeldungen gemäß FE2 Dokumentation
+// 3. NEUER TEST-ENDPUNKT ZUM TESTEN DER LOG-FUNKTION
+app.get('/api/test-log', (req, res) => {
+    writeLog("Test-Log manuell über den Browser/GET-Request ausgelöst!", {
+        query: req.query,
+        ip: req.ip
+    });
+
+    res.status(200).json({ 
+        success: true, 
+        message: "Test-Log erfolgreich geschrieben! Prüfe die log.txt auf dem Server." 
+    });
+});
+
+// Funktion zum Abrufen der Rückmeldungen
 async function fetchResponses() {
     if (!activeAlarm.alarmId) return;
 
@@ -94,9 +122,9 @@ async function fetchResponses() {
         );
 
         activeAlarm.responses = response.data || [];
-        console.log(`Rückmeldungen aktualisiert (${activeAlarm.responses.length} Personen)`);
+        writeLog(`Rückmeldungen aktualisiert (${activeAlarm.responses.length} Personen)`);
     } catch (error) {
-        console.error('Fehler beim Abrufen der Rückmeldungen:', error.response ? error.response.status : error.message);
+        writeLog('Fehler beim Abrufen der Rückmeldungen:', error.response ? error.response.status : error.message);
     }
 }
 
@@ -106,5 +134,5 @@ app.get('/api/current-alarm', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    writeLog(`Server gestartet auf Port ${PORT}`);
 });
