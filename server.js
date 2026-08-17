@@ -3,12 +3,12 @@ const express = require('express');
 const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
+const mqtt = require('mqtt');
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Hilfsfunktion zum gleichzeitigen Ausgeben in die Konsole und in die log.txt
 function writeLog(message, data = null) {
     const timestamp = new Date().toISOString();
     let logString = `[${timestamp}] ${message}`;
@@ -26,6 +26,41 @@ function writeLog(message, data = null) {
     }
 }
 
+// MQTT Client
+if (process.env.MQTT_HOST) {
+    const mqttUrl = `mqtts://${process.env.MQTT_HOST}:8883`;
+    
+    const mqttClient = mqtt.connect(mqttUrl, {
+        username: process.env.MQTT_USER,
+        password: process.env.MQTT_PASS,
+        rejectUnauthorized: false
+    });
+
+    mqttClient.on('connect', () => {
+        writeLog('Erfolgreich mit MQTT-Broker verbunden.');
+        
+        const topic = 'feuerwehr/leeste/rueckmeldungen';
+        mqttClient.subscribe(topic, (err) => {
+            if (!err) {
+                writeLog(`Lausche auf MQTT-Topic: ${topic}`);
+            } else {
+                writeLog('Fehler beim Abonnieren des Topics:', err);
+            }
+        });
+    });
+
+    mqttClient.on('message', (topic, message) => {
+        const payload = message.toString();
+        writeLog(`Neue MQTT Nachricht auf [${topic}] empfangen:`, payload);
+    });
+
+    mqttClient.on('error', (err) => {
+        writeLog('MQTT Verbindungsfehler:', err);
+    });
+} else {
+    writeLog('Kein MQTT_HOST in .env definiert. MQTT-Client inaktiv.');
+}
+
 let activeAlarm = {
     alarmId: null,
     startedAt: null,
@@ -35,7 +70,7 @@ let activeAlarm = {
 let pollInterval = null;
 let resetTimeout = null;
 
-// 1. Webhook Empfänger (FE2 API Alarmierung)
+// Webhook Empfänger API
 app.post('/api/webhook/alarm', (req, res) => {
     if (req.query.token !== process.env.WEBHOOK_SECRET) {
         writeLog('Unautorisierter Zugriffversuch auf /api/webhook/alarm');
@@ -49,7 +84,7 @@ app.post('/api/webhook/alarm', (req, res) => {
         return res.status(400).json({ error: 'Keine externalId/alarmId im Webhook empfangen' });
     }
 
-    writeLog(`Neuer Alarm empfangen! ID: ${alarmId}`);
+    writeLog(`Neuer Alarm empfangen. ID: ${alarmId}`);
     
     activeAlarm = {
         alarmId: alarmId,
@@ -82,30 +117,30 @@ app.post('/api/webhook/alarm', (req, res) => {
     res.json({ status: 'ok', alarmId: alarmId });
 });
 
-// 2. AMweb Webhook Test-Listener
+// Test-Listener AMweb
 app.post('/api/webhook/amweb-test', (req, res) => {
-    writeLog("AMWEB WEBHOOK EMPFANGEN:", {
+    writeLog("AMweb Webhook empfangen:", {
         headers: req.headers,
         body: req.body
     });
 
-    res.status(200).json({ success: true, message: "AMweb Webhook erfolgreich empfangen!" });
+    res.status(200).json({ success: true, message: "AMweb Webhook erfolgreich empfangen." });
 });
 
-// 3. NEUER TEST-ENDPUNKT ZUM TESTEN DER LOG-FUNKTION
+// Test-Endpunkt Log
 app.get('/api/test-log', (req, res) => {
-    writeLog("Test-Log manuell über den Browser/GET-Request ausgelöst!", {
+    writeLog("Test-Log manuell über Browser/GET-Request ausgelöst.", {
         query: req.query,
         ip: req.ip
     });
 
     res.status(200).json({ 
         success: true, 
-        message: "Test-Log erfolgreich geschrieben! Prüfe die log.txt auf dem Server." 
+        message: "Test-Log erfolgreich geschrieben." 
     });
 });
 
-// Funktion zum Abrufen der Rückmeldungen
+// API-Abruf Rückmeldungen
 async function fetchResponses() {
     if (!activeAlarm.alarmId) return;
 
@@ -122,7 +157,7 @@ async function fetchResponses() {
         );
 
         activeAlarm.responses = response.data || [];
-        writeLog(`Rückmeldungen aktualisiert (${activeAlarm.responses.length} Personen)`);
+        writeLog(`Rückmeldungen aktualisiert (${activeAlarm.responses.length} Personen).`);
     } catch (error) {
         writeLog('Fehler beim Abrufen der Rückmeldungen:', error.response ? error.response.status : error.message);
     }
