@@ -16,14 +16,13 @@ let activeAlarm = {
 let pollInterval = null;
 let resetTimeout = null;
 
-// 1. Webhook Empfänger
+// 1. Webhook Empfänger (Bestehend für FE2 API Alarmierung)
 app.post('/api/webhook/alarm', (req, res) => {
     // Auth - Parameter Check
     if (req.query.token !== process.env.WEBHOOK_SECRET) {
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Die Dokumentation sagt: externalId wird benötigt
     const alarmId = req.body.externalId || req.body.alarmId || req.body.id;
 
     if (!alarmId) {
@@ -64,6 +63,20 @@ app.post('/api/webhook/alarm', (req, res) => {
     res.json({ status: 'ok', alarmId: alarmId });
 });
 
+// ==========================================
+// 2. NEUER AMWEB WEBHOOK TEST-LISTENER
+// ==========================================
+app.post('/api/webhook/amweb-test', (req, res) => {
+    console.log("----------------------------------------");
+    console.log("🔔 AMWEB WEBHOOK EMPFANGEN UM:", new Date().toISOString());
+    console.log("Headers:", req.headers);
+    console.log("Body (Rohdaten von AMweb):", JSON.stringify(req.body, null, 2));
+    console.log("----------------------------------------");
+
+    // Dem AMweb eine erfolgreiche Antwort zurückgeben
+    res.status(200).json({ success: true, message: "AMweb Webhook erfolgreich empfangen!" });
+});
+
 // Funktion zum Abrufen der Rückmeldungen gemäß FE2 Dokumentation
 async function fetchResponses() {
     if (!activeAlarm.alarmId) return;
@@ -73,7 +86,7 @@ async function fetchResponses() {
             `${process.env.FE2_BASE_URL}/rest/addressbook/external/${activeAlarm.alarmId}/feedback`,
             {
                 headers: {
-                    'Authorization': process.env.FE2_API_KEY, // Der Zugriffsschlüssel direkt im Header
+                    'Authorization': process.env.FE2_API_KEY,
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 }
