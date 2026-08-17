@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Einsatz Display - Rückmeldungen</title>
+    <title>Einsatz Display - Jugendfeuerwehr Leeste</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -30,13 +30,30 @@
             border-bottom: 2px solid #333;
             padding-bottom: 15px;
             margin-bottom: 25px;
+            position: relative;
         }
 
         h1 {
             margin: 0;
-            font-size: 2rem;
+            font-size: 1.8rem;
             text-transform: uppercase;
             letter-spacing: 1px;
+        }
+
+        /* Logo-Styling für oben Mitte */
+        .logo-container {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo-container img {
+            max-height: 70px;
+            width: auto;
+            object-fit: contain;
         }
 
         .status-badge {
@@ -79,8 +96,8 @@
 
         .time-counter {
             font-size: 1.4rem;
-            font-weight: bold;
-            color: #ffcc00;
+            font-weight: 600;
+            color: #dcdde1;
             font-variant-numeric: tabular-nums;
         }
 
@@ -102,7 +119,6 @@
             transition: transform 0.2s ease;
         }
 
-        /* Status-Farbkennzeichnungen für die Kacheln */
         .card.status-green {
             border-left-color: #4cd137;
             background-color: #112e12;
@@ -111,7 +127,7 @@
         .card.status-red {
             border-left-color: #ff4d4d;
             background-color: #2e1111;
-            opacity: 0.4; /* Ausgegraut */
+            opacity: 0.4;
         }
 
         .card.status-yellow {
@@ -156,7 +172,6 @@
             text-transform: uppercase;
         }
 
-        /* Freitext Anzeige */
         .free-text {
             font-size: 0.9rem;
             color: #fbc531;
@@ -189,9 +204,11 @@
             font-size: 1.8rem;
         }
 
-        @media (max-width: 650px) {
-            header, .info-bar { flex-direction: column; gap: 15px; text-align: center; }
+        @media (max-width: 850px) {
+            header { flex-direction: column; gap: 15px; text-align: center; }
+            .logo-container { position: static; transform: none; margin: 5px 0; }
             h1 { font-size: 1.5rem; }
+            .info-bar { flex-direction: column; gap: 15px; text-align: center; }
             .counter-container, .time-counter { font-size: 1.1rem; justify-content: center; }
         }
     </style>
@@ -200,6 +217,10 @@
 
     <header>
         <h1>Einsatzkräfte auf Anfahrt</h1>
+        <!-- Logo hier eingebunden (passe den Dateinamen an, falls nötig, z.B. logo.jpg) -->
+        <div class="logo-container">
+            <img src="logo.png" alt="Jugendfeuerwehr Leeste Logo">
+        </div>
         <div id="status" class="status-badge">Warten auf Einsatz...</div>
     </header>
 
@@ -224,14 +245,12 @@
     <script>
         let alarmStartTime = null;
 
-        // Bestimmt die Kisten-Farbe anhand des Status (YES/HERE = Grün, NO/ABSENT = Rot, Rest = Gelb)
         function getCardStatusClass(state) {
             if (state === 'YES' || state === 'HERE') return 'status-green';
             if (state === 'NO' || state === 'ABSENT') return 'status-red';
             return 'status-yellow';
         }
 
-        // Bestimmt die Punkt-Farbe im Status-Badge
         function getDotClass(state) {
             if (state === 'YES' || state === 'HERE') return 'dot-green';
             if (state === 'NO' || state === 'ABSENT') return 'dot-red';
@@ -277,7 +296,6 @@
 
                 let persons = data.responses || [];
 
-                // Sortierung: Alphabetisch nach Name (oder du kannst hier nach Status/Name sortieren)
                 persons.sort((a, b) => {
                     const nameA = (a.name || '').toLowerCase();
                     const nameB = (b.name || '').toLowerCase();
@@ -330,7 +348,6 @@
                     nameRow.appendChild(stateContainer);
                     card.appendChild(nameRow);
 
-                    // Freitext einblenden, falls vorhanden (z.B. bei FREE)
                     if (person.free) {
                         const freeTextEl = document.createElement('div');
                         freeTextEl.className = 'free-text';
