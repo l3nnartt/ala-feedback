@@ -23,10 +23,11 @@ app.post('/api/webhook/alarm', (req, res) => {
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const alarmId = req.body.alarmId || req.body.id || req.body.alarm_id;
+    // Die Dokumentation sagt: externalId wird benötigt
+    const alarmId = req.body.externalId || req.body.alarmId || req.body.id;
 
     if (!alarmId) {
-        return res.status(400).json({ error: 'Keine alarmId im Webhook empfangen' });
+        return res.status(400).json({ error: 'Keine externalId/alarmId im Webhook empfangen' });
     }
 
     console.log(`Neuer Alarm empfangen! ID: ${alarmId}`);
@@ -37,19 +38,16 @@ app.post('/api/webhook/alarm', (req, res) => {
         responses: []
     };
 
-    // Vorherige Timer löschen, falls ein neuer Alarm reinkommt
     if (pollInterval) clearInterval(pollInterval);
     if (resetTimeout) clearTimeout(resetTimeout);
 
-    // Sofort Daten abrufen
     fetchResponses();
 
-    // Polling: 15 Minuten lang alle 30 Sekunden abrufen
+    // Polling für 15 Minuten
     const FIFTEEN_MINUTES = 15 * 60 * 1000;
     pollInterval = setInterval(() => {
         const elapsed = Date.now() - activeAlarm.startedAt;
         if (elapsed >= FIFTEEN_MINUTES) {
-            console.log('15 Minuten abgelaufen. Polling beendet.');
             clearInterval(pollInterval);
             pollInterval = null;
         } else {
@@ -57,34 +55,26 @@ app.post('/api/webhook/alarm', (req, res) => {
         }
     }, 30000);
 
-    // Automatischer Reset: Nach 30 Minuten den Alarm auf dem Display beenden
+    // Reset nach 30 Minuten
     const THIRTY_MINUTES = 30 * 60 * 1000;
     resetTimeout = setTimeout(() => {
-        console.log('30 Minuten abgelaufen. Display wird resettet.');
-        activeAlarm = {
-            alarmId: null,
-            startedAt: null,
-            responses: []
-        };
-        resetTimeout = null;
+        activeAlarm = { alarmId: null, startedAt: null, responses: [] };
     }, THIRTY_MINUTES);
 
     res.json({ status: 'ok', alarmId: alarmId });
 });
 
-// Funktion zum Abrufen der Rückmeldungen von FE2 (via Basic Auth)
+// Funktion zum Abrufen der Rückmeldungen gemäß FE2 Dokumentation
 async function fetchResponses() {
     if (!activeAlarm.alarmId) return;
 
     try {
         const response = await axios.get(
-            `${process.env.FE2_BASE_URL}/rest/api/v2/alarms/${activeAlarm.alarmId}/responses`,
+            `${process.env.FE2_BASE_URL}/rest/addressbook/external/${activeAlarm.alarmId}/feedback`,
             {
-                auth: {
-                    username: process.env.FE2_ALARM_USER,
-                    password: process.env.FE2_ALARM_PASSWORD
-                },
                 headers: {
+                    'Authorization': process.env.FE2_API_KEY, // Der Zugriffsschlüssel direkt im Header
+                    'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 }
             }
@@ -93,11 +83,10 @@ async function fetchResponses() {
         activeAlarm.responses = response.data || [];
         console.log(`Rückmeldungen aktualisiert (${activeAlarm.responses.length} Personen)`);
     } catch (error) {
-        console.error('Fehler beim Abrufen der Rückmeldungen von FE2:', error.response ? error.response.data : error.message);
+        console.error('Fehler beim Abrufen der Rückmeldungen:', error.response ? error.response.status : error.message);
     }
 }
 
-// 2. API für das FE-Display
 app.get('/api/current-alarm', (req, res) => {
     res.json(activeAlarm);
 });
