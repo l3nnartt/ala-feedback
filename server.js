@@ -14,6 +14,7 @@ let activeAlarm = {
 };
 
 let pollInterval = null;
+let resetTimeout = null;
 
 // 1. Webhook Empfänger
 app.post('/api/webhook/alarm', (req, res) => {
@@ -36,12 +37,14 @@ app.post('/api/webhook/alarm', (req, res) => {
         responses: []
     };
 
+    // Vorherige Timer löschen, falls ein neuer Alarm reinkommt
     if (pollInterval) clearInterval(pollInterval);
+    if (resetTimeout) clearTimeout(resetTimeout);
 
-    // Sofort abrufen
+    // Sofort Daten abrufen
     fetchResponses();
 
-    // 15 Minuten Lang alle 30 Sekunden abrufen
+    // Polling: 15 Minuten lang alle 30 Sekunden abrufen
     const FIFTEEN_MINUTES = 15 * 60 * 1000;
     pollInterval = setInterval(() => {
         const elapsed = Date.now() - activeAlarm.startedAt;
@@ -54,10 +57,22 @@ app.post('/api/webhook/alarm', (req, res) => {
         }
     }, 30000);
 
+    // Automatischer Reset: Nach 30 Minuten den Alarm auf dem Display beenden
+    const THIRTY_MINUTES = 30 * 60 * 1000;
+    resetTimeout = setTimeout(() => {
+        console.log('30 Minuten abgelaufen. Display wird resettet.');
+        activeAlarm = {
+            alarmId: null,
+            startedAt: null,
+            responses: []
+        };
+        resetTimeout = null;
+    }, THIRTY_MINUTES);
+
     res.json({ status: 'ok', alarmId: alarmId });
 });
 
-// Funktion zum Abrufen der Rückmeldungen von FE2
+// Funktion zum Abrufen der Rückmeldungen von FE2 (via Basic Auth)
 async function fetchResponses() {
     if (!activeAlarm.alarmId) return;
 
@@ -82,7 +97,7 @@ async function fetchResponses() {
     }
 }
 
-// 2. API für das FE-Display (BUGFIX: (req, res) statt nur (res))
+// 2. API für das FE-Display
 app.get('/api/current-alarm', (req, res) => {
     res.json(activeAlarm);
 });

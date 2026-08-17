@@ -52,10 +52,28 @@
             color: #fff;
         }
 
+        /* Container für Zähler und Uhr */
+        .info-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            background-color: #1e1e1e;
+            padding: 15px 20px;
+            border-radius: 10px;
+            border-left: 5px solid #2e7d32;
+        }
+
         .counter {
             font-size: 1.5rem;
-            margin-bottom: 20px;
             font-weight: 600;
+        }
+
+        .time-counter {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--yellow-color);
+            font-variant-numeric: tabular-nums;
         }
 
         .grid {
@@ -130,7 +148,10 @@
     </header>
 
     <div id="alarm-content" style="display: none;">
-        <div class="counter">Zusagen: <span id="count">0</span> Person(en)</div>
+        <div class="info-bar">
+            <div class="counter">Zusagen: <span id="count">0</span> Person(en)</div>
+            <div class="time-counter" id="timer-container">Dauer: <span id="timer">00:00</span></div>
+        </div>
         <div id="person-grid" class="grid"></div>
     </div>
 
@@ -145,30 +166,31 @@
         const BLUE_TAGS = ['Gruppenführer', 'GF'];
         const WHITE_TAGS = ['Mannschaft', 'FM', 'OFM', 'HFM'];
 
+        let alarmStartTime = null;
+
         function getCardClass(functions) {
             if (!functions || !Array.isArray(functions)) return '';
             
             const lowerFuncs = functions.map(f => String(f).toLowerCase());
 
-            // Priorität 1: Gelb (OrtsBM)
-            if (YELLOW_TAGS.some(yt => lowerFuncs.includes(yt.toLowerCase()))) {
-                return 'tag-yellow';
-            }
-            // Priorität 2: Rot (Zugführer)
-            if (RED_TAGS.some(rt => lowerFuncs.includes(rt.toLowerCase()))) {
-                return 'tag-red';
-            }
-            // Priorität 3: Blau (Gruppenführer)
-            if (BLUE_TAGS.some(bt => lowerFuncs.includes(bt.toLowerCase()))) {
-                return 'tag-blue';
-            }
-            // Normales Personal / Mannschaft -> bleibt Standard (keine extra Klasse)
-            if (WHITE_TAGS.some(wt => lowerFuncs.includes(wt.toLowerCase()))) {
-                return '';
-            }
+            if (YELLOW_TAGS.some(yt => lowerFuncs.includes(yt.toLowerCase()))) return 'tag-yellow';
+            if (RED_TAGS.some(rt => lowerFuncs.includes(rt.toLowerCase()))) return 'tag-red';
+            if (BLUE_TAGS.some(bt => lowerFuncs.includes(bt.toLowerCase()))) return 'tag-blue';
+            if (WHITE_TAGS.some(wt => lowerFuncs.includes(wt.toLowerCase()))) return '';
 
             return '';
         }
+
+        // Stoppuhr-Logik (wird jede Sekunde ausgeführt)
+        setInterval(() => {
+            if (!alarmStartTime) return;
+            
+            const elapsedSeconds = Math.floor((Date.now() - alarmStartTime) / 1000);
+            const minutes = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
+            const seconds = String(elapsedSeconds % 60).padStart(2, '0');
+            
+            document.getElementById('timer').textContent = `${minutes}:${seconds}`;
+        }, 1000);
 
         async function updateDisplay() {
             try {
@@ -181,18 +203,24 @@
                 const gridEl = document.getElementById('person-grid');
                 const countEl = document.getElementById('count');
 
+                // Wenn kein Alarm aktiv ist
                 if (!data || !data.alarmId) {
                     statusEl.textContent = 'Bereitschaft';
                     statusEl.classList.remove('status-active');
                     contentEl.style.display = 'none';
                     noAlarmEl.style.display = 'block';
+                    alarmStartTime = null; // Stoppuhr anhalten
                     return;
                 }
 
+                // Einsatz aktiv!
                 statusEl.textContent = 'EINSATZ AKTIV';
                 statusEl.classList.add('status-active');
                 contentEl.style.display = 'block';
                 noAlarmEl.style.display = 'none';
+                
+                // Startzeitpunkt für die Stoppuhr übernehmen
+                alarmStartTime = data.startedAt;
 
                 // Nur Personen anzeigen, die zugesagt haben ("state": "YES")
                 const comingPersons = (data.responses || []).filter(r => r.state === 'YES');
@@ -229,7 +257,12 @@
                 });
 
             } catch (err) {
-                console.error('Fehler beim Aktualisieren des Displays:', err);
+                console.error('Verbindungsfehler zum Server:', err);
+                
+                // Bei einem Verbindungsabbruch: 10 Sekunden warten und Seite neu laden
+                setTimeout(() => {
+                    location.reload();
+                }, 10000);
             }
         }
 
