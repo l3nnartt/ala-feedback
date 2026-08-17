@@ -29,9 +29,11 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid #333;
-            padding-bottom: 15px;
+            padding-top: 20px;
+            padding-bottom: 30px;
             margin-bottom: 25px;
             position: relative;
+            min-height: 90px;
         }
 
         h1 {
@@ -51,7 +53,9 @@
         }
 
         .logo-container img {
-            max-height: 70px;
+            max-height: 95px;
+            margin-top: 10px;
+            margin-bottom: 10px;
             width: auto;
             object-fit: contain;
         }
@@ -188,7 +192,6 @@
         .tag-yellow { background-color: #f57f17; color: #000; }
         .tag-red { background-color: #c62828; color: #fff; }
         .tag-blue { background-color: #1976d2; color: #fff; }
-        /* AGT ist jetzt standardmäßig neutral wie Mannschaft/MA */
 
         .no-alarm {
             text-align: center;
@@ -199,7 +202,7 @@
 
         @media (max-width: 950px) {
             header { flex-direction: column; gap: 15px; text-align: center; }
-            .logo-container { position: static; transform: none; margin: 5px 0; }
+            .logo-container { position: static; transform: none; margin: 20px 0; }
             h1 { font-size: 1.5rem; }
             .info-bar { flex-direction: column; gap: 15px; text-align: center; }
             .counter-container, .time-counter { font-size: 1.1rem; justify-content: center; }
@@ -246,7 +249,6 @@
             return 'status-yellow';
         }
 
-        // AGT verliert die Sonderfarbe und bleibt neutral (gibt '' zurück)
         function getTagClass(func) {
             const f = String(func).toLowerCase();
             if (f.includes('ortsbm') || f.includes('ortsbrandmeister')) return 'tag-yellow';
@@ -314,7 +316,6 @@
                     else if (isNo) countNo++;
                     else countOther++;
 
-                    // Spezial-Funktionen nur bei echten Zusagen zählen
                     if (isYes && p.functions && Array.isArray(p.functions)) {
                         p.functions.forEach(f => {
                             const lower = String(f).toLowerCase();
