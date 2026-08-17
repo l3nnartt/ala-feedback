@@ -9,12 +9,10 @@
             --bg-color: #121212;
             --card-bg: #1e1e1e;
             --text-color: #ffffff;
-            --yellow-color: #ffcc00;
-            --red-color: #ff4d4d;
-            --blue-color: #3399ff;
             --green-color: #2e7d32;
+            --red-color: #c62828;
+            --yellow-color: #f57f17;
             --default-color: #2b2b2b;
-            --gray-color: #444;
         }
 
         body {
@@ -76,13 +74,13 @@
         }
 
         .badge-yes { color: #4cd137; }
-        .badge-no { color: var(--red-color); }
+        .badge-no { color: #ff4d4d; }
         .badge-other { color: #fbc531; }
 
         .time-counter {
             font-size: 1.4rem;
             font-weight: bold;
-            color: var(--yellow-color);
+            color: #ffcc00;
             font-variant-numeric: tabular-nums;
         }
 
@@ -104,16 +102,21 @@
             transition: transform 0.2s ease;
         }
 
-        /* Farbkennzeichnungen nach Funktionen */
-        .card.tag-yellow { border-left-color: var(--yellow-color); background-color: #2a2415; }
-        .card.tag-red { border-left-color: var(--red-color); background-color: #2a1515; }
-        .card.tag-blue { border-left-color: var(--blue-color); background-color: #122033; }
+        /* Status-Farbkennzeichnungen für die Kacheln */
+        .card.status-green {
+            border-left-color: #4cd137;
+            background-color: #112e12;
+        }
 
-        /* Ausgegraute Karten für Absagen / Abwesenheiten */
-        .card.card-inactive {
-            opacity: 0.35;
-            border-left-color: var(--gray-color) !important;
-            background-color: #1a1a1a !important;
+        .card.status-red {
+            border-left-color: #ff4d4d;
+            background-color: #2e1111;
+            opacity: 0.4; /* Ausgegraut */
+        }
+
+        .card.status-yellow {
+            border-left-color: #fbc531;
+            background-color: #2e2a11;
         }
 
         .name-row {
@@ -135,7 +138,6 @@
             gap: 6px;
         }
 
-        /* Status Kreise */
         .status-dot {
             width: 12px;
             height: 12px;
@@ -143,8 +145,8 @@
             display: inline-block;
         }
         .dot-green { background-color: #4cd137; box-shadow: 0 0 8px #4cd137; }
-        .dot-red { background-color: var(--red-color); }
-        .dot-gray { background-color: #7f8fa6; }
+        .dot-red { background-color: #ff4d4d; }
+        .dot-yellow { background-color: #fbc531; }
 
         .state-tag {
             font-size: 0.75rem;
@@ -152,6 +154,17 @@
             border-radius: 4px;
             background: rgba(255,255,255,0.1);
             text-transform: uppercase;
+        }
+
+        /* Freitext Anzeige */
+        .free-text {
+            font-size: 0.9rem;
+            color: #fbc531;
+            background: rgba(251, 197, 49, 0.15);
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-top: 6px;
+            font-style: italic;
         }
 
         .tags {
@@ -209,37 +222,20 @@
     </div>
 
     <script>
-        const YELLOW_TAGS = ['OrtsBM', 'Ortsbrandmeister', 'Stv. OrtsBM'];
-        const RED_TAGS = ['Zugführer', 'ZF'];
-        const BLUE_TAGS = ['Gruppenführer', 'GF'];
-
         let alarmStartTime = null;
 
-        function getPriority(functions) {
-            if (!functions || !Array.isArray(functions)) return 4;
-            const lowerFuncs = functions.map(f => String(f).toLowerCase());
-
-            if (YELLOW_TAGS.some(yt => lowerFuncs.includes(yt.toLowerCase()))) return 1;
-            if (RED_TAGS.some(rt => lowerFuncs.includes(rt.toLowerCase()))) return 2;
-            if (BLUE_TAGS.some(bt => lowerFuncs.includes(bt.toLowerCase()))) return 3;
-            return 4;
+        // Bestimmt die Kisten-Farbe anhand des Status (YES/HERE = Grün, NO/ABSENT = Rot, Rest = Gelb)
+        function getCardStatusClass(state) {
+            if (state === 'YES' || state === 'HERE') return 'status-green';
+            if (state === 'NO' || state === 'ABSENT') return 'status-red';
+            return 'status-yellow';
         }
 
-        function getCardClass(functions) {
-            if (!functions || !Array.isArray(functions)) return '';
-            const lowerFuncs = functions.map(f => String(f).toLowerCase());
-
-            if (YELLOW_TAGS.some(yt => lowerFuncs.includes(yt.toLowerCase()))) return 'tag-yellow';
-            if (RED_TAGS.some(rt => lowerFuncs.includes(rt.toLowerCase()))) return 'tag-red';
-            if (BLUE_TAGS.some(bt => lowerFuncs.includes(bt.toLowerCase()))) return 'tag-blue';
-            return '';
-        }
-
-        // Hilfsfunktion für die Punkt-Farbe im Status
+        // Bestimmt die Punkt-Farbe im Status-Badge
         function getDotClass(state) {
             if (state === 'YES' || state === 'HERE') return 'dot-green';
             if (state === 'NO' || state === 'ABSENT') return 'dot-red';
-            return 'dot-gray';
+            return 'dot-yellow';
         }
 
         setInterval(() => {
@@ -281,19 +277,13 @@
 
                 let persons = data.responses || [];
 
-                // Sortierung: 1. Prio (Gelb -> Rot -> Blau -> Mannschaft), 2. Alphabetisch nach Name
+                // Sortierung: Alphabetisch nach Name (oder du kannst hier nach Status/Name sortieren)
                 persons.sort((a, b) => {
-                    const prioA = getPriority(a.functions);
-                    const prioB = getPriority(b.functions);
-
-                    if (prioA !== prioB) return prioA - prioB;
-
                     const nameA = (a.name || '').toLowerCase();
                     const nameB = (b.name || '').toLowerCase();
                     return nameA.localeCompare(nameB);
                 });
 
-                // Zähler berechnen (Zusagen, Absagen, Rest)
                 let countYes = 0;
                 let countNo = 0;
                 let countOther = 0;
@@ -313,12 +303,9 @@
                 persons.forEach(person => {
                     const card = document.createElement('div');
                     const functions = person.functions || [];
-                    const colorClass = getCardClass(functions);
+                    const statusClass = getCardStatusClass(person.state);
 
-                    const isInactive = person.state === 'NO' || person.state === 'ABSENT';
-                    const inactiveClass = isInactive ? 'card-inactive' : '';
-
-                    card.className = `card ${colorClass} ${inactiveClass}`;
+                    card.className = `card ${statusClass}`;
                     
                     const nameRow = document.createElement('div');
                     nameRow.className = 'name-row';
@@ -328,7 +315,6 @@
                     nameEl.textContent = person.name || 'Unbekannt';
                     nameRow.appendChild(nameEl);
 
-                    // Status Container mit farbigem Kreis und Text
                     const stateContainer = document.createElement('div');
                     stateContainer.className = 'state-container';
 
@@ -343,6 +329,14 @@
 
                     nameRow.appendChild(stateContainer);
                     card.appendChild(nameRow);
+
+                    // Freitext einblenden, falls vorhanden (z.B. bei FREE)
+                    if (person.free) {
+                        const freeTextEl = document.createElement('div');
+                        freeTextEl.className = 'free-text';
+                        freeTextEl.textContent = `"${person.free}"`;
+                        card.appendChild(freeTextEl);
+                    }
 
                     if (functions.length > 0) {
                         const tagsEl = document.createElement('div');
