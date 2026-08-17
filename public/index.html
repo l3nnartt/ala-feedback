@@ -12,6 +12,7 @@
             --yellow-color: #ffcc00;
             --red-color: #ff4d4d;
             --blue-color: #3399ff;
+            --green-color: #2e7d32;
             --default-color: #2b2b2b;
             --gray-color: #444;
         }
@@ -49,7 +50,7 @@
         }
 
         .status-active {
-            background-color: #2e7d32;
+            background-color: var(--green-color);
             color: #fff;
         }
 
@@ -61,16 +62,25 @@
             background-color: #1e1e1e;
             padding: 15px 20px;
             border-radius: 10px;
-            border-left: 5px solid #2e7d32;
+            border-left: 5px solid var(--green-color);
+            flex-wrap: wrap;
+            gap: 15px;
         }
 
-        .counter {
-            font-size: 1.5rem;
+        .counter-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 1.3rem;
             font-weight: 600;
         }
 
+        .badge-yes { color: #4cd137; }
+        .badge-no { color: var(--red-color); }
+        .badge-other { color: #fbc531; }
+
         .time-counter {
-            font-size: 1.5rem;
+            font-size: 1.4rem;
             font-weight: bold;
             color: var(--yellow-color);
             font-variant-numeric: tabular-nums;
@@ -94,7 +104,7 @@
             transition: transform 0.2s ease;
         }
 
-        /* Farbkennzeichnungen nach Funktionen (Priorität) */
+        /* Farbkennzeichnungen nach Funktionen */
         .card.tag-yellow { border-left-color: var(--yellow-color); background-color: #2a2415; }
         .card.tag-red { border-left-color: var(--red-color); background-color: #2a1515; }
         .card.tag-blue { border-left-color: var(--blue-color); background-color: #122033; }
@@ -113,11 +123,28 @@
         }
 
         .name {
-            font-size: 1.4rem;
+            font-size: 1.3rem;
             font-weight: bold;
             margin-bottom: 5px;
             color: #ffffff;
         }
+
+        .state-container {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Status Kreise */
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot-green { background-color: #4cd137; box-shadow: 0 0 8px #4cd137; }
+        .dot-red { background-color: var(--red-color); }
+        .dot-gray { background-color: #7f8fa6; }
 
         .state-tag {
             font-size: 0.75rem;
@@ -152,7 +179,7 @@
         @media (max-width: 650px) {
             header, .info-bar { flex-direction: column; gap: 15px; text-align: center; }
             h1 { font-size: 1.5rem; }
-            .counter, .time-counter { font-size: 1.2rem; }
+            .counter-container, .time-counter { font-size: 1.1rem; justify-content: center; }
         }
     </style>
 </head>
@@ -165,7 +192,13 @@
 
     <div id="alarm-content" style="display: none;">
         <div class="info-bar">
-            <div class="counter">Zusagen: <span id="count">0</span> Person(en)</div>
+            <div class="counter-container">
+                <span>Zusagen: <strong id="count-yes" class="badge-yes">0</strong></span>
+                <span>|</span>
+                <span>Absagen: <strong id="count-no" class="badge-no">0</strong></span>
+                <span>|</span>
+                <span>Sonstige: <strong id="count-other" class="badge-other">0</strong></span>
+            </div>
             <div class="time-counter" id="timer-container">Dauer: <span id="timer">00:00</span></div>
         </div>
         <div id="person-grid" class="grid"></div>
@@ -182,7 +215,6 @@
 
         let alarmStartTime = null;
 
-        // Ermittelt die Priorität für die Sortierung (1 = Gelb, 2 = Rot, 3 = Blau, 4 = Mannschaft)
         function getPriority(functions) {
             if (!functions || !Array.isArray(functions)) return 4;
             const lowerFuncs = functions.map(f => String(f).toLowerCase());
@@ -203,6 +235,13 @@
             return '';
         }
 
+        // Hilfsfunktion für die Punkt-Farbe im Status
+        function getDotClass(state) {
+            if (state === 'YES' || state === 'HERE') return 'dot-green';
+            if (state === 'NO' || state === 'ABSENT') return 'dot-red';
+            return 'dot-gray';
+        }
+
         setInterval(() => {
             if (!alarmStartTime) return;
             const elapsedSeconds = Math.floor((Date.now() - alarmStartTime) / 1000);
@@ -220,7 +259,10 @@
                 const contentEl = document.getElementById('alarm-content');
                 const noAlarmEl = document.getElementById('no-alarm-message');
                 const gridEl = document.getElementById('person-grid');
-                const countEl = document.getElementById('count');
+                
+                const countYesEl = document.getElementById('count-yes');
+                const countNoEl = document.getElementById('count-no');
+                const countOtherEl = document.getElementById('count-other');
 
                 if (!data || !data.alarmId) {
                     statusEl.textContent = 'Bereitschaft';
@@ -239,24 +281,33 @@
 
                 let persons = data.responses || [];
 
-                // Sortierung: 1. Nach Prio (Gelb -> Rot -> Blau -> Mannschaft), 2. Alphabetisch nach Name
+                // Sortierung: 1. Prio (Gelb -> Rot -> Blau -> Mannschaft), 2. Alphabetisch nach Name
                 persons.sort((a, b) => {
                     const prioA = getPriority(a.functions);
                     const prioB = getPriority(b.functions);
 
-                    if (prioA !== prioB) {
-                        return prioA - prioB;
-                    }
+                    if (prioA !== prioB) return prioA - prioB;
 
-                    // Gleiche Prio -> Alphabetisch nach Name
                     const nameA = (a.name || '').toLowerCase();
                     const nameB = (b.name || '').toLowerCase();
                     return nameA.localeCompare(nameB);
                 });
 
-                // Zähle nur echte Zusagen (YES oder HERE)
-                const activeCount = persons.filter(p => p.state === 'YES' || p.state === 'HERE').length;
-                countEl.textContent = activeCount;
+                // Zähler berechnen (Zusagen, Absagen, Rest)
+                let countYes = 0;
+                let countNo = 0;
+                let countOther = 0;
+
+                persons.forEach(p => {
+                    if (p.state === 'YES' || p.state === 'HERE') countYes++;
+                    else if (p.state === 'NO' || p.state === 'ABSENT') countNo++;
+                    else countOther++;
+                });
+
+                countYesEl.textContent = countYes;
+                countNoEl.textContent = countNo;
+                countOtherEl.textContent = countOther;
+
                 gridEl.innerHTML = '';
 
                 persons.forEach(person => {
@@ -264,13 +315,11 @@
                     const functions = person.functions || [];
                     const colorClass = getCardClass(functions);
 
-                    // Prüfen ob Absage oder Abwesenheit
                     const isInactive = person.state === 'NO' || person.state === 'ABSENT';
                     const inactiveClass = isInactive ? 'card-inactive' : '';
 
                     card.className = `card ${colorClass} ${inactiveClass}`;
                     
-                    // Kopfzeile der Karte (Name + Status)
                     const nameRow = document.createElement('div');
                     nameRow.className = 'name-row';
 
@@ -279,14 +328,22 @@
                     nameEl.textContent = person.name || 'Unbekannt';
                     nameRow.appendChild(nameEl);
 
-                    const stateBadge = document.createElement('div');
+                    // Status Container mit farbigem Kreis und Text
+                    const stateContainer = document.createElement('div');
+                    stateContainer.className = 'state-container';
+
+                    const dot = document.createElement('span');
+                    dot.className = `status-dot ${getDotClass(person.state)}`;
+                    stateContainer.appendChild(dot);
+
+                    const stateBadge = document.createElement('span');
                     stateBadge.className = 'state-tag';
                     stateBadge.textContent = person.state || 'UNKNOWN';
-                    nameRow.appendChild(stateBadge);
+                    stateContainer.appendChild(stateBadge);
 
+                    nameRow.appendChild(stateContainer);
                     card.appendChild(nameRow);
 
-                    // Funktionen / Tags anzeigen
                     if (functions.length > 0) {
                         const tagsEl = document.createElement('div');
                         tagsEl.className = 'tags';
