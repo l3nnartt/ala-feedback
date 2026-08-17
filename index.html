@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Einsatz Display - Rückmeldungen</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --text-color: #ffffff;
+            --red-color: #ff4d4d;
+            --blue-color: #3399ff;
+            --default-color: #2b2b2b;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+            margin-bottom: 25px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 2rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            background-color: #333;
+        }
+
+        .status-active {
+            background-color: #2e7d32;
+            color: #fff;
+        }
+
+        .counter {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+
+        .card {
+            padding: 15px 20px;
+            border-radius: 10px;
+            background-color: var(--default-color);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            border-left: 8px solid #666;
+            transition: transform 0.2s ease;
+        }
+
+        /* Farbkennzeichnungen nach Tags */
+        .card.tag-red {
+            border-left-color: var(--red-color);
+            background-color: #2a1515;
+        }
+
+        .card.tag-blue {
+            border-left-color: var(--blue-color);
+            background-color: #122033;
+        }
+
+        .name {
+            font-size: 1.4rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .tags {
+            font-size: 0.85rem;
+            opacity: 0.8;
+            margin-top: 8px;
+        }
+
+        .tag-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background-color: rgba(255,255,255,0.15);
+            margin-right: 5px;
+            margin-top: 4px;
+        }
+
+        .no-alarm {
+            text-align: center;
+            padding: 100px 20px;
+            color: #777;
+            font-size: 1.8rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Einsatzkräfte im Anmarsch</h1>
+        <div id="status" class="status-badge">Warten auf Einsatz...</div>
+    </header>
+
+    <div id="alarm-content" style="display: none;">
+        <div class="counter">Zusagen: <span id="count">0</span> Person(en)</div>
+        <div id="person-grid" class="grid"></div>
+    </div>
+
+    <div id="no-alarm-message" class="no-alarm">
+        Kein aktiver Einsatz
+    </div>
+
+
+    <script>
+        // we love js
+        // Definition der groups/funcitosn fuer die farbige Markierung
+        const YELLOW_TAGS = ['OrtsBM'];
+        const RED_TAGS = ['Zugführer'];
+        const BLUE_TAGS = ['Gruppenführer'];
+
+        function getCardClass(tags) {
+            if (!tags || !Array.isArray(tags)) return '';
+            
+            const lowerTags = tags.map(t => String(t).toLowerCase());
+
+            // check for red
+            if (RED_TAGS.some(rt => lowerTags.includes(rt.toLowerCase()))) {
+                return 'tag-red';
+            }
+            // check for blue
+            if (BLUE_TAGS.some(bt => lowerTags.includes(bt.toLowerCase()))) {
+                return 'tag-blue';
+            }
+
+            return '';
+        }
+
+        async function updateDisplay() {
+            try {
+                const response = await fetch('/api/current-alarm');
+                const data = await response.json();
+
+                const statusEl = document.getElementById('status');
+                const contentEl = document.getElementById('alarm-content');
+                const noAlarmEl = document.getElementById('no-alarm-message');
+                const gridEl = document.getElementById('person-grid');
+                const countEl = document.getElementById('count');
+
+                if (!data.alarmId) {
+                    statusEl.textContent = 'Bereitschaft';
+                    statusEl.classList.remove('status-active');
+                    contentEl.style.display = 'none';
+                    noAlarmEl.style.display = 'block';
+                    return;
+                }
+
+                statusEl.textContent = 'EINSATZ AKTIV';
+                statusEl.classList.add('status-active');
+                contentEl.style.display = 'block';
+                noAlarmEl.style.display = 'none';
+
+                // Nur Personen filtern, die zugesagt/kommend sind (z.B. feedbackType / response status)
+                // HINWEIS: Je nach FE2-Response Struktur anpassen (z.B. res.coming === true)
+                const comingPersons = (data.responses || []).filter(r => {
+                    return r.coming === true || r.type === 'COME' || r.status === 'POSITIVE';
+                });
+
+                countEl.textContent = comingPersons.length;
+                gridEl.innerHTML = '';
+
+                comingPersons.forEach(person => {
+                    const card = document.createElement('div');
+                    const tags = person.tags || person.labels || [];
+                    const colorClass = getCardClass(tags);
+
+                    card.className = `card ${colorClass}`;
+                    
+                    const nameEl = document.createElement('div');
+                    nameEl.className = 'name';
+                    nameEl.textContent = `${person.firstName || ''} ${person.lastName || person.name || 'Unbekannt'}`.trim();
+                    card.appendChild(nameEl);
+
+                    if (tags.length > 0) {
+                        const tagsEl = document.createElement('div');
+                        tagsEl.className = 'tags';
+                        tags.forEach(t => {
+                            const badge = document.createElement('span');
+                            badge.className = 'tag-badge';
+                            badge.textContent = t;
+                            tagsEl.appendChild(badge);
+                        });
+                        card.appendChild(tagsEl);
+                    }
+
+                    gridEl.appendChild(card);
+                });
+
+            } catch (err) {
+                console.error('Fehler beim Aktualisieren des Displays:', err);
+            }
+        }
+
+        // Display alle 5 Sekunden lokal aktualisieren
+        setInterval(updateDisplay, 5000);
+        updateDisplay();
+    </script>
+</body>
+</html>
