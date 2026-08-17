@@ -54,8 +54,14 @@ if (process.env.MQTT_HOST) {
         writeLog(`Neue MQTT Nachricht auf [${topic}] empfangen:`, payload);
     });
 
+    // Hier sehen wir jetzt den genauen Fehlergrund (z.B. Bad username/password)
     mqttClient.on('error', (err) => {
-        writeLog('MQTT Verbindungsfehler:', err);
+        writeLog('MQTT Verbindungsfehler Detail:', {
+            message: err.message,
+            code: err.code,
+            errno: err.errno,
+            syscall: err.syscall
+        });
     });
 } else {
     writeLog('Kein MQTT_HOST in .env definiert. MQTT-Client inaktiv.');
