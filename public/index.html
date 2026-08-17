@@ -138,6 +138,29 @@
             color: #777;
             font-size: 1.8rem;
         }
+
+        /* Responsive Design für Smartphones & Tablets */
+        @media (max-width: 650px) {
+            header {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .info-bar {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
+
+            .counter, .time-counter {
+                font-size: 1.2rem;
+            }
+        }
     </style>
 </head>
 <body>
@@ -222,8 +245,21 @@
                 // Startzeitpunkt für die Stoppuhr übernehmen
                 alarmStartTime = data.startedAt;
 
-                // Nur Personen anzeigen, die zugesagt haben ("state": "YES")
-                const comingPersons = (data.responses || []).filter(r => r.state === 'YES');
+                // Nur Personen filtern, die zugesagt haben ("state": "YES")
+                let comingPersons = (data.responses || []).filter(r => r.state === 'YES');
+
+                // Sortierung: Älteste Zusagen zuerst (chronologisch)
+                // FE2 nutzt hierfür oft Felder wie 'timestamp', 'date' oder 'time'
+                comingPersons.sort((a, b) => {
+                    const timeA = new Date(a.timestamp || a.time || a.date || 0).getTime();
+                    const timeB = new Date(b.timestamp || b.time || b.date || 0).getTime();
+                    
+                    // Fallback: Wenn keine Zeitstempel vorhanden sind, 
+                    // behalte die Reihenfolge der FE2-API (diese ist meist chronologisch)
+                    if (timeA === 0 && timeB === 0) return 0;
+                    
+                    return timeA - timeB; 
+                });
 
                 countEl.textContent = comingPersons.length;
                 gridEl.innerHTML = '';
