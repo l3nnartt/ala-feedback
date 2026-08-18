@@ -12,7 +12,6 @@
             --green-color: #2e7d32;
             --red-color: #c62828;
             --yellow-color: #f57f17;
-            --blue-color: #1976d2;
             --default-color: #2b2b2b;
         }
 
@@ -98,7 +97,6 @@
         .badge-yes { color: #4cd137; }
         .badge-no { color: #ff4d4d; }
         .badge-other { color: #fbc531; }
-        .special-stat { color: #00d2d3; margin-left: 10px; }
 
         .time-counter {
             font-size: 1.4rem;
@@ -154,45 +152,6 @@
             color: #ffffff;
         }
 
-        .state-tag {
-            font-size: 0.75rem;
-            padding: 3px 8px;
-            border-radius: 4px;
-            background: rgba(255,255,255,0.1);
-            text-transform: uppercase;
-            font-weight: bold;
-        }
-
-        .free-text {
-            font-size: 0.9rem;
-            color: #fbc531;
-            background: rgba(251, 197, 49, 0.15);
-            padding: 4px 8px;
-            border-radius: 4px;
-            margin-top: 6px;
-            font-style: italic;
-        }
-
-        .tags {
-            font-size: 0.85rem;
-            margin-top: 10px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 5px;
-        }
-
-        .tag-badge {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 4px;
-            background-color: rgba(255,255,255,0.15);
-            font-size: 0.75rem;
-            font-weight: bold;
-        }
-        .tag-yellow { background-color: #f57f17; color: #000; }
-        .tag-red { background-color: #c62828; color: #fff; }
-        .tag-blue { background-color: #1976d2; color: #fff; }
-
         .no-alarm {
             text-align: center;
             padding: 100px 20px;
@@ -227,9 +186,6 @@
                 <span>Absagen: <strong id="count-no" class="badge-no">0</strong></span>
                 <span>|</span>
                 <span>Sonstige: <strong id="count-other" class="badge-other">0</strong></span>
-                <span class="special-stat">| AGT: <strong id="count-agt">0</strong></span>
-                <span class="special-stat">| MA: <strong id="count-ma">0</strong></span>
-                <span class="special-stat">| Kettensäge: <strong id="count-ks">0</strong></span>
             </div>
             <div class="time-counter" id="timer-container">Dauer: <span id="timer">00:00</span></div>
         </div>
@@ -247,14 +203,6 @@
             if (state === 'YES' || state === 'HERE') return 'status-green';
             if (state === 'NO' || state === 'ABSENT') return 'status-red';
             return 'status-yellow';
-        }
-
-        function getTagClass(func) {
-            const f = String(func).toLowerCase();
-            if (f.includes('ortsbm') || f.includes('ortsbrandmeister')) return 'tag-yellow';
-            if (f.includes('zugführer') || f.includes('zf')) return 'tag-red';
-            if (f.includes('gruppenführer') || f.includes('gf')) return 'tag-blue';
-            return ''; 
         }
 
         setInterval(() => {
@@ -278,9 +226,6 @@
                 const countYesEl = document.getElementById('count-yes');
                 const countNoEl = document.getElementById('count-no');
                 const countOtherEl = document.getElementById('count-other');
-                const countAgtEl = document.getElementById('count-agt');
-                const countMaEl = document.getElementById('count-ma');
-                const countKsEl = document.getElementById('count-ks');
 
                 if (!data || !data.alarmId) {
                     statusEl.textContent = 'Bereitschaft';
@@ -306,7 +251,6 @@
                 });
 
                 let countYes = 0, countNo = 0, countOther = 0;
-                let agtCount = 0, maCount = 0, ksCount = 0;
 
                 persons.forEach(p => {
                     const isYes = (p.state === 'YES' || p.state === 'HERE');
@@ -315,29 +259,16 @@
                     if (isYes) countYes++;
                     else if (isNo) countNo++;
                     else countOther++;
-
-                    if (isYes && p.functions && Array.isArray(p.functions)) {
-                        p.functions.forEach(f => {
-                            const lower = String(f).toLowerCase();
-                            if (lower.includes('agt')) agtCount++;
-                            if (lower.includes('ma') || lower.includes('maschinist')) maCount++;
-                            if (lower.includes('kettensäge') || lower.includes('ks')) ksCount++;
-                        });
-                    }
                 });
 
                 countYesEl.textContent = countYes;
                 countNoEl.textContent = countNo;
                 countOtherEl.textContent = countOther;
-                countAgtEl.textContent = agtCount;
-                countMaEl.textContent = maCount;
-                countKsEl.textContent = ksCount;
 
                 gridEl.innerHTML = '';
 
                 persons.forEach(person => {
                     const card = document.createElement('div');
-                    const functions = person.functions || [];
                     const statusClass = getCardStatusClass(person.state);
 
                     card.className = `card ${statusClass}`;
@@ -350,30 +281,19 @@
                     nameEl.textContent = person.name || 'Unbekannt';
                     nameRow.appendChild(nameEl);
 
-                    const stateBadge = document.createElement('span');
-                    stateBadge.className = 'state-tag';
-                    stateBadge.textContent = person.state || 'UNKNOWN';
-                    nameRow.appendChild(stateBadge);
-
                     card.appendChild(nameRow);
 
                     if (person.free) {
                         const freeTextEl = document.createElement('div');
-                        freeTextEl.className = 'free-text';
+                        freeTextEl.style.fontSize = '0.9rem';
+                        freeTextEl.style.color = '#fbc531';
+                        freeTextEl.style.background = 'rgba(251, 197, 49, 0.15)';
+                        freeTextEl.style.padding = '4px 8px';
+                        freeTextEl.style.borderRadius = '4px';
+                        freeTextEl.style.marginTop = '6px';
+                        freeTextEl.style.fontStyle = 'italic';
                         freeTextEl.textContent = `"${person.free}"`;
                         card.appendChild(freeTextEl);
-                    }
-
-                    if (functions.length > 0) {
-                        const tagsEl = document.createElement('div');
-                        tagsEl.className = 'tags';
-                        functions.forEach(f => {
-                            const badge = document.createElement('span');
-                            badge.className = `tag-badge ${getTagClass(f)}`;
-                            badge.textContent = f;
-                            tagsEl.appendChild(badge);
-                        });
-                        card.appendChild(tagsEl);
                     }
 
                     gridEl.appendChild(card);
