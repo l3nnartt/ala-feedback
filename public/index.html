@@ -82,7 +82,7 @@
             border-radius: 10px;
             border-left: 5px solid var(--green-color);
             flex-wrap: wrap;
-            gap: 15px;
+            gap: 20px;
         }
 
         .counter-container {
@@ -97,6 +97,23 @@
         .badge-yes { color: #4cd137; }
         .badge-no { color: #ff4d4d; }
         .badge-other { color: #fbc531; }
+
+        /* NEU: Container für Funktionen */
+        .functions-container {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .func-badge {
+            background-color: #333;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            border: 1px solid #555;
+        }
 
         .time-counter {
             font-size: 1.4rem;
@@ -129,12 +146,6 @@
             background-color: #112e12;
         }
 
-        .card.status-red {
-            border-left-color: #ff4d4d;
-            background-color: #2e1111;
-            opacity: 0.4;
-        }
-
         .card.status-yellow {
             border-left-color: #fbc531;
             background-color: #2e2a11;
@@ -153,7 +164,6 @@
             color: #ffffff;
         }
 
-        /* Saubere CSS-Klasse für den Freitext */
         .free-text {
             font-size: 0.9rem;
             color: #fbc531;
@@ -199,6 +209,10 @@
                 <span>|</span>
                 <span>Sonstige: <strong id="count-other" class="badge-other">0</strong></span>
             </div>
+
+            <!-- NEU: Container für Funktionen -->
+            <div id="functions-container" class="functions-container"></div>
+            
             <div class="time-counter" id="timer-container">Dauer: <span id="timer">00:00</span></div>
         </div>
         <div id="person-grid" class="grid"></div>
@@ -238,6 +252,7 @@
                 const countYesEl = document.getElementById('count-yes');
                 const countNoEl = document.getElementById('count-no');
                 const countOtherEl = document.getElementById('count-other');
+                const funcContainer = document.getElementById('functions-container');
 
                 if (!data || !data.alarmId) {
                     statusEl.textContent = 'Bereitschaft';
@@ -253,6 +268,17 @@
                 contentEl.style.display = 'block';
                 noAlarmEl.style.display = 'none';
                 alarmStartTime = data.startedAt;
+
+                // FUNKTIONEN RENDERN
+                funcContainer.innerHTML = '';
+                if (data.functions && data.functions.length > 0) {
+                    data.functions.forEach(f => {
+                        const span = document.createElement('span');
+                        span.className = 'func-badge';
+                        span.textContent = `${f.label}: ${f.count}`;
+                        funcContainer.appendChild(span);
+                    });
+                }
 
                 let persons = data.responses || [];
 
@@ -280,6 +306,9 @@
                 gridEl.innerHTML = '';
 
                 persons.forEach(person => {
+                    // NEU: Nur Personen anzeigen, die NICHT 'NO' (Absage) sind
+                    if (person.state === 'NO') return;
+
                     const card = document.createElement('div');
                     const statusClass = getCardStatusClass(person.state);
 
@@ -295,10 +324,10 @@
 
                     card.appendChild(nameRow);
 
-                    // NEU: Freitext wird nur noch angezeigt, wenn der Status 'UNKNOWN' ist
+                    // Freitext nur bei Status 'UNKNOWN' (gelb)
                     if (person.free && person.state === 'UNKNOWN') {
                         const freeTextEl = document.createElement('div');
-                        freeTextEl.className = 'free-text'; // Nutzt nun die saubere CSS-Klasse von oben
+                        freeTextEl.className = 'free-text';
                         freeTextEl.textContent = `"${person.free}"`;
                         card.appendChild(freeTextEl);
                     }
