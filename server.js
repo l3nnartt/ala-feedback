@@ -131,7 +131,7 @@ if (process.env.MQTT_HOST) {
 
                         // 2. Status-Mapping: Den deutschen Text in ein einheitliches System (YES/NO/UNKNOWN) übersetzen
                         let mappedState = 'UNKNOWN';
-                        if (statusPart.includes('komme nicht') || statusPart.includes('nein') || statusPart.includes('absage')) {
+                        if (statusPart.includes('komme nicht') || statusPart.includes('nein') || statusPart.includes('absage') || statusPart.includes('abwesend')) {
                             mappedState = 'NO';
                         } else if (statusPart.includes('komme') || statusPart.includes('ja') || statusPart.includes('zusage') || statusPart.includes('hier')) {
                             mappedState = 'YES';
