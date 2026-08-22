@@ -1,9 +1,5 @@
 /**
  * Einsatz-Display Server für die Feuerwehr Leeste
- * 
- * Dieses Skript stellt einen lokalen Webserver bereit (Express) und 
- * verbindet sich parallel als Client mit einem MQTT-Broker (HiveMQ), 
- * um Echtzeit-Alarmierungen aus FE2 zu empfangen und für das Display aufzubereiten.
  */
 
 require('dotenv').config();
@@ -18,132 +14,134 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 /**
- * Hilfsfunktion für das Logging.
- * Schreibt Meldungen zeitgleich in die Konsole und in die Datei "log.txt".
- * 
- * @param {string} message - Die Hauptnachricht, die geloggt werden soll.
- * @param {any} data - Optionale Zusatzdaten (z.B. JSON-Objekte), die mit ausgegeben werden.
+ * Verbesserte Logging-Funktion
+ * Nutzt nun Loglevel und schreibt asynchron in eine .log Datei, 
+ * um den Server bei vielen Anfragen nicht zu blockieren.
  */
-function writeLog(message, data = null) {
+function writeLog(level, message, data = null) {
     const timestamp = new Date().toISOString();
-    let logString = `[${timestamp}] ${message}`;
+    let logString = `[${timestamp}] [${level}] ${message}`;
     
-    // Falls ein Objekt übergeben wurde, wird es für die Lesbarkeit in einen String umgewandelt
     if (data !== null) {
         logString += ` ${typeof data === 'object' ? JSON.stringify(data, null, 2) : data}`;
     }
     
-    console.log(logString);
-
-    try {
-        const logFilePath = path.join(__dirname, 'log.txt');
-        // Hängt den Log-Eintrag an die Datei an und fügt eine Trennlinie hinzu
-        fs.appendFileSync(logFilePath, logString + '\n----------------------------------------\n');
-    } catch (err) {
-        console.error('Konnte nicht in log.txt schreiben:', err);
+    // Ausgabe in der Konsole je nach Level farblich/strukturiert
+    if (level === 'ERROR') {
+        console.error(logString);
+    } else {
+        console.log(logString);
     }
+
+    // In Datei server.log schreiben (asynchron)
+    const logFilePath = path.join(__dirname, 'server.log');
+    fs.appendFile(logFilePath, logString + '\n----------------------------------------\n', (err) => {
+        if (err) console.error('[ERROR] Konnte nicht in server.log schreiben:', err);
+    });
 }
 
 // === ALARM STATE ===
-// Hier wird der aktuell laufende Einsatz im Arbeitsspeicher des Servers gehalten
 let activeAlarm = {
     alarmId: null,
     startedAt: null,
     responses: []
 };
 
-// Timer-Variable, um den Alarm nach einer bestimmten Zeit automatisch zu beenden
 let resetTimeout = null;
 
 // === MQTT CLIENT ===
 if (process.env.MQTT_HOST) {
-    // Erzwingt eine sichere TLS-Verbindung über Port 8883
     const mqttUrl = `mqtts://${process.env.MQTT_HOST}:8883`;
     
     const mqttClient = mqtt.connect(mqttUrl, {
         username: process.env.MQTT_USER,
         password: process.env.MQTT_PASS,
-        rejectUnauthorized: false // Wichtig für Cloud-Broker, um Zertifikats-Fehler zu vermeiden
+        rejectUnauthorized: false
     });
 
-    // Event: Erfolgreiche Verbindung zum Broker
     mqttClient.on('connect', () => {
-        writeLog('Erfolgreich mit MQTT-Broker verbunden.');
+        writeLog('INFO', 'Erfolgreich mit MQTT-Broker verbunden.');
         
         const topic = 'feuerwehr/leeste/rueckmeldungen';
         mqttClient.subscribe(topic, (err) => {
             if (!err) {
-                writeLog(`Lausche auf MQTT-Topic: ${topic}`);
+                writeLog('INFO', `Lausche auf MQTT-Topic: ${topic}`);
             } else {
-                writeLog('Fehler beim Abonnieren des Topics:', err);
+                writeLog('ERROR', 'Fehler beim Abonnieren des Topics:', err);
             }
         });
     });
 
-    // Event: Neue Nachricht auf dem abonnierten Topic empfangen
+    // Verbindungsabbrueche aufzeichnen
+    mqttClient.on('offline', () => {
+        writeLog('WARN', 'Verbindung zum MQTT-Broker verloren. Versuche Reconnect...');
+    });
+
     mqttClient.on('message', (topic, message) => {
         const payload = message.toString();
         
-        // Vollständige Rohdaten zur Fehlersuche loggen
-        writeLog(`Neue MQTT Nachricht auf Topic [${topic}] empfangen. Rohdaten:`, payload);
+        // Vollstaendige Daten bei Alarm immer als INFO wegschreiben
+        writeLog('INFO', `Neue Nachricht auf [${topic}]. Rohdaten:`, payload);
         
         try {
             const data = JSON.parse(payload);
             
-            // Validierung: Handelt es sich um das erwartete FE2-Format?
             if (data.externalId && data.parameters && data.parameters.pluginmessage) {
                 const alarmId = data.externalId;
-                writeLog(`Alarm erkannt per MQTT. ID: ${alarmId}`);
-
-                // Prüfen, ob es sich um einen neuen Einsatz handelt oder nur um ein Update
+                
                 if (activeAlarm.alarmId !== alarmId) {
+                    writeLog('ALARM', `Neuer Einsatz erkannt! Alarm-ID: ${alarmId}`);
                     activeAlarm.alarmId = alarmId;
                     activeAlarm.startedAt = Date.now();
                     
-                    // Alten Reset-Timer löschen, falls noch einer lief
                     if (resetTimeout) clearTimeout(resetTimeout);
                     
-                    // Automatischen Reset nach 30 Minuten (1.800.000 Millisekunden) einrichten
                     const THIRTY_MINUTES = 30 * 60 * 1000;
                     resetTimeout = setTimeout(() => {
-                        writeLog('Alarm automatisch nach 30 Minuten zurückgesetzt.');
+                        writeLog('INFO', `Alarm (ID: ${activeAlarm.alarmId}) automatisch nach 30 Minuten zurückgesetzt. Display geht in Bereitschaft.`);
                         activeAlarm = { alarmId: null, startedAt: null, responses: [] };
                     }, THIRTY_MINUTES);
+                } else {
+                    writeLog('INFO', `Update fuer aktiven Einsatz erhalten (ID: ${alarmId})`);
                 }
 
                 // === DATEN-VERARBEITUNG ===
                 let parsedResponses = [];
+                let countYes = 0;
+                let countNo = 0;
+                let countUnknown = 0;
                 
-                // Der Textblock aus FE2 wird an jedem Zeilenumbruch aufgespalten
                 const lines = data.parameters.pluginmessage.split('\n');
+                const keywordsNo  = ['komme nicht', 'nein', 'absage', 'abwesend'];
+                const keywordsYes = ['komme', 'ja', 'zusage', 'hier'];
 
                 lines.forEach(line => {
-                    // Zeile muss existieren und einen Doppelpunkt enthalten (Format: "Name: Status")
                     if (typeof line === 'string' && line.includes(':')) {
                         const parts = line.split(':');
                         const namePart = parts[0].trim();
                         const statusPart = parts[1].trim().toLowerCase();
 
-                        // 1. Filter: Überspringe Zeilen, die reine Statistiken (Zahlen) oder Summen enthalten
                         if (!isNaN(statusPart) || namePart.toLowerCase().includes('funktionen') || namePart.toLowerCase().includes('gesamt')) {
                             return;
                         }
 
-                        // 2. Status-Mapping: Den deutschen Text in ein einheitliches System (YES/NO/UNKNOWN) übersetzen
                         let mappedState = 'UNKNOWN';
-                        if (statusPart.includes('komme nicht') || statusPart.includes('nein') || statusPart.includes('absage') || statusPart.includes('abwesend')) {
+                        
+                        if (keywordsNo.some(kw => statusPart.includes(kw))) {
                             mappedState = 'NO';
-                        } else if (statusPart.includes('komme') || statusPart.includes('ja') || statusPart.includes('zusage') || statusPart.includes('hier')) {
+                            countNo++;
+                        } else if (keywordsYes.some(kw => statusPart.includes(kw))) {
                             mappedState = 'YES';
+                            countYes++;
+                        } else {
+                            countUnknown++;
                         }
 
-                        // 3. Freitext-Verarbeitung: Wenn der Status "frei" ist, prüfen ob FE2 einen extra Text liefert
                         let freeText = parts[1].trim();
                         if (statusPart.includes('frei') && data.parameters.feedbackFreeText) {
                             freeText = data.parameters.feedbackFreeText;
                         }
 
-                        // Person zur Liste hinzufügen
                         parsedResponses.push({
                             name: namePart,
                             state: mappedState,
@@ -153,51 +151,44 @@ if (process.env.MQTT_HOST) {
                     }
                 });
 
-                // Die aufbereitete Liste im aktiven Alarm speichern
                 activeAlarm.responses = parsedResponses;
-                writeLog(`Rückmeldungen verarbeitet: ${parsedResponses.length} Personen gefunden.`);
+                
+                // Detaillierte Zusammenfassung loggen
+                writeLog('INFO', 'Auswertung abgeschlossen.', {
+                    gesamtPersonen: parsedResponses.length,
+                    zusagen: countYes,
+                    absagen: countNo,
+                    sonstige: countUnknown
+                });
+
+            } else {
+                writeLog('WARN', 'MQTT Nachricht entsprach nicht dem erwarteten FE2-Format.', { payloadPreview: payload.substring(0, 100) });
             }
         } catch (error) {
-            writeLog('Fehler beim Verarbeiten der MQTT-Nachricht:', error.message);
+            writeLog('ERROR', 'Fehler beim Verarbeiten (JSON Parse) der MQTT-Nachricht:', error.message);
         }
     });
 
-    // Event: Fehler bei der MQTT-Verbindung
     mqttClient.on('error', (err) => {
-        writeLog('MQTT Verbindungsfehler:', err);
+        writeLog('ERROR', 'Kritischer MQTT Verbindungsfehler:', err);
     });
 } else {
-    writeLog('Kein MQTT_HOST in .env definiert. MQTT-Client ist inaktiv.');
+    writeLog('WARN', 'Kein MQTT_HOST in .env definiert. Server laeuft ohne MQTT-Anbindung.');
 }
 
 // === REST API ENDPUNKTE (Frontend-Schnittstellen) ===
 
-/**
- * Endpunkt für das Frontend-Display.
- * Liefert alle 5 Sekunden den aktuellen Status als JSON zurück.
- */
 app.get('/api/current-alarm', (req, res) => {
     res.json(activeAlarm);
 });
 
-/**
- * Endpunkt für administrative Tests.
- * Schreibt beim Aufruf über den Browser manuell einen Eintrag in die log.txt.
- */
 app.get('/api/test-log', (req, res) => {
-    writeLog("Test-Log manuell ausgelöst.", {
-        query: req.query,
-        ip: req.ip
-    });
-
-    res.status(200).json({ 
-        success: true, 
-        message: "Test-Log erfolgreich geschrieben." 
-    });
+    writeLog('INFO', "Test-Log manuell ausgelöst via Browser.", { ip: req.ip });
+    res.status(200).json({ success: true, message: "Test-Log erfolgreich in server.log geschrieben." });
 });
 
 // === SERVER START ===
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    writeLog(`Server gestartet auf Port ${PORT}`);
+    writeLog('INFO', `Webserver gestartet auf Port ${PORT}`);
 });
