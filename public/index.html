@@ -91,28 +91,27 @@
             gap: 12px;
             font-size: 1.2rem;
             font-weight: 600;
-            flex-wrap: wrap;
         }
 
         .badge-yes { color: #4cd137; }
         .badge-no { color: #ff4d4d; }
         .badge-other { color: #fbc531; }
 
-        /* NEU: Container für Funktionen */
-        .functions-container {
+        .functions-wrapper {
             display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
             justify-content: center;
+            gap: 15px;
+            flex-wrap: wrap;
+            flex: 1;
         }
-        .func-badge {
-            background-color: #333;
-            color: #fff;
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 0.9rem;
+        .func-item {
+            color: #ffffff;
+            font-size: 1.1rem;
+            font-weight: 500;
+        }
+        .func-count-active {
+            color: #4cd137;
             font-weight: bold;
-            border: 1px solid #555;
         }
 
         .time-counter {
@@ -144,6 +143,12 @@
         .card.status-green {
             border-left-color: #4cd137;
             background-color: #112e12;
+        }
+
+        .card.status-red {
+            border-left-color: #ff4d4d;
+            background-color: #2e1111;
+            opacity: 0.4;
         }
 
         .card.status-yellow {
@@ -187,6 +192,7 @@
             h1 { font-size: 1.5rem; }
             .info-bar { flex-direction: column; gap: 15px; text-align: center; }
             .counter-container, .time-counter { font-size: 1.1rem; justify-content: center; }
+            .functions-wrapper { order: 3; width: 100%; }
         }
     </style>
 </head>
@@ -210,8 +216,7 @@
                 <span>Sonstige: <strong id="count-other" class="badge-other">0</strong></span>
             </div>
 
-            <!-- NEU: Container für Funktionen -->
-            <div id="functions-container" class="functions-container"></div>
+            <div id="functions-container" class="functions-wrapper"></div>
             
             <div class="time-counter" id="timer-container">Dauer: <span id="timer">00:00</span></div>
         </div>
@@ -269,34 +274,27 @@
                 noAlarmEl.style.display = 'none';
                 alarmStartTime = data.startedAt;
 
-                // FUNKTIONEN RENDERN
                 funcContainer.innerHTML = '';
                 if (data.functions && data.functions.length > 0) {
                     data.functions.forEach(f => {
+                        const count = parseInt(f.count) || 0;
                         const span = document.createElement('span');
-                        span.className = 'func-badge';
-                        span.textContent = `${f.label}: ${f.count}`;
+                        span.className = 'func-item';
+                        
+                        const countClass = count >= 1 ? 'func-count-active' : '';
+                        span.innerHTML = `${f.label}: <span class="${countClass}">${f.count}</span>`;
                         funcContainer.appendChild(span);
                     });
                 }
 
                 let persons = data.responses || [];
-
-                persons.sort((a, b) => {
-                    const nameA = (a.name || '').toLowerCase();
-                    const nameB = (b.name || '').toLowerCase();
-                    return nameA.localeCompare(nameB);
-                });
+                persons.sort((a, b) => (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase()));
 
                 let countYes = 0, countNo = 0, countOther = 0;
-
                 persons.forEach(p => {
                     const isYes = (p.state === 'YES' || p.state === 'HERE');
                     const isNo = (p.state === 'NO' || p.state === 'ABSENT');
-
-                    if (isYes) countYes++;
-                    else if (isNo) countNo++;
-                    else countOther++;
+                    if (isYes) countYes++; else if (isNo) countNo++; else countOther++;
                 });
 
                 countYesEl.textContent = countYes;
@@ -304,39 +302,31 @@
                 countOtherEl.textContent = countOther;
 
                 gridEl.innerHTML = '';
-
                 persons.forEach(person => {
-                    // NEU: Nur Personen anzeigen, die NICHT 'NO' (Absage) sind
                     if (person.state === 'NO') return;
 
                     const card = document.createElement('div');
-                    const statusClass = getCardStatusClass(person.state);
-
-                    card.className = `card ${statusClass}`;
+                    card.className = `card ${getCardStatusClass(person.state)}`;
                     
                     const nameRow = document.createElement('div');
                     nameRow.className = 'name-row';
-
                     const nameEl = document.createElement('div');
                     nameEl.className = 'name';
                     nameEl.textContent = person.name || 'Unbekannt';
                     nameRow.appendChild(nameEl);
-
                     card.appendChild(nameRow);
 
-                    // Freitext nur bei Status 'UNKNOWN' (gelb)
                     if (person.free && person.state === 'UNKNOWN') {
                         const freeTextEl = document.createElement('div');
                         freeTextEl.className = 'free-text';
                         freeTextEl.textContent = `"${person.free}"`;
                         card.appendChild(freeTextEl);
                     }
-
                     gridEl.appendChild(card);
                 });
 
             } catch (err) {
-                console.error('Verbindungsfehler zum Server:', err);
+                console.error('Verbindungsfehler:', err);
                 setTimeout(() => { location.reload(); }, 10000);
             }
         }
