@@ -118,9 +118,10 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            justify-content: center;
             border-left: 8px solid #666;
             transition: transform 0.2s ease;
+            min-height: 50px;
         }
 
         .card.status-green {
@@ -137,6 +138,7 @@
         .card.status-yellow {
             border-left-color: #fbc531;
             background-color: #2e2a11;
+            justify-content: space-between;
         }
 
         .name-row {
@@ -148,8 +150,18 @@
         .name {
             font-size: 1.3rem;
             font-weight: bold;
-            margin-bottom: 5px;
             color: #ffffff;
+        }
+
+        /* Saubere CSS-Klasse für den Freitext */
+        .free-text {
+            font-size: 0.9rem;
+            color: #fbc531;
+            background: rgba(251, 197, 49, 0.15);
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-top: 6px;
+            font-style: italic;
         }
 
         .no-alarm {
@@ -283,15 +295,10 @@
 
                     card.appendChild(nameRow);
 
-                    if (person.free) {
+                    // NEU: Freitext wird nur noch angezeigt, wenn der Status 'UNKNOWN' ist
+                    if (person.free && person.state === 'UNKNOWN') {
                         const freeTextEl = document.createElement('div');
-                        freeTextEl.style.fontSize = '0.9rem';
-                        freeTextEl.style.color = '#fbc531';
-                        freeTextEl.style.background = 'rgba(251, 197, 49, 0.15)';
-                        freeTextEl.style.padding = '4px 8px';
-                        freeTextEl.style.borderRadius = '4px';
-                        freeTextEl.style.marginTop = '6px';
-                        freeTextEl.style.fontStyle = 'italic';
+                        freeTextEl.className = 'free-text'; // Nutzt nun die saubere CSS-Klasse von oben
                         freeTextEl.textContent = `"${person.free}"`;
                         card.appendChild(freeTextEl);
                     }
