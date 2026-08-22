@@ -44,7 +44,8 @@ function writeLog(level, message, data = null) {
 let activeAlarm = {
     alarmId: null,
     startedAt: null,
-    responses: []
+    responses: [],
+    functions: [] // Neu hinzugefügt
 };
 
 let resetTimeout = null;
@@ -99,13 +100,13 @@ if (process.env.MQTT_HOST) {
                     const THIRTY_MINUTES = 30 * 60 * 1000;
                     resetTimeout = setTimeout(() => {
                         writeLog('INFO', `Alarm (ID: ${activeAlarm.alarmId}) automatisch nach 30 Minuten zurückgesetzt. Display geht in Bereitschaft.`);
-                        activeAlarm = { alarmId: null, startedAt: null, responses: [] };
+                        activeAlarm = { alarmId: null, startedAt: null, responses: [], functions: [] };
                     }, THIRTY_MINUTES);
                 } else {
                     writeLog('INFO', `Update fuer aktiven Einsatz erhalten (ID: ${alarmId})`);
                 }
 
-                // === DATEN-VERARBEITUNG ===
+                // === DATEN-VERARBEITUNG: PERSONEN ===
                 let parsedResponses = [];
                 let countYes = 0;
                 let countNo = 0;
@@ -151,7 +152,23 @@ if (process.env.MQTT_HOST) {
                     }
                 });
 
+                // === DATEN-VERARBEITUNG: FUNKTIONEN (NEU) ===
+                let functionsSummary = [];
+                if (data.parameters && data.parameters.function_all) {
+                    const funcLines = data.parameters.function_all.split('\n');
+                    funcLines.forEach(line => {
+                        if (line.includes(':') && !line.toLowerCase().includes('funktionen')) {
+                            const parts = line.split(':');
+                            functionsSummary.push({
+                                label: parts[0].trim(),
+                                count: parts[1].trim()
+                            });
+                        }
+                    });
+                }
+
                 activeAlarm.responses = parsedResponses;
+                activeAlarm.functions = functionsSummary; // Funktionen speichern
                 
                 // Detaillierte Zusammenfassung loggen
                 writeLog('INFO', 'Auswertung abgeschlossen.', {
