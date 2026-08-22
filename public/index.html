@@ -288,7 +288,16 @@
                 }
 
                 let persons = data.responses || [];
-                persons.sort((a, b) => (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase()));
+                
+                persons.sort((a, b) => {
+                    const isNoA = (a.state === 'NO' || a.state === 'ABSENT');
+                    const isNoB = (b.state === 'NO' || b.state === 'ABSENT');
+
+                    if (isNoA && !isNoB) return 1;
+                    if (!isNoA && isNoB) return -1;
+
+                    return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
+                });
 
                 let countYes = 0, countNo = 0, countOther = 0;
                 persons.forEach(p => {
@@ -303,8 +312,6 @@
 
                 gridEl.innerHTML = '';
                 persons.forEach(person => {
-                    if (person.state === 'NO') return;
-
                     const card = document.createElement('div');
                     card.className = `card ${getCardStatusClass(person.state)}`;
                     
