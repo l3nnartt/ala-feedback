@@ -93,7 +93,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            font-size: clamp(1rem, 1.8vh, 1.2rem);
+            font-size: 1.1rem;
             font-weight: 600;
         }
 
@@ -110,7 +110,7 @@
         }
         .func-item {
             color: #ffffff;
-            font-size: clamp(0.9rem, 1.6vh, 1.1rem);
+            font-size: 0.95rem;
             font-weight: 500;
         }
         .func-count-active {
@@ -120,7 +120,7 @@
 
         .time-counter {
             justify-self: end;
-            font-size: clamp(1rem, 1.8vh, 1.2rem);
+            font-size: 1.1rem;
             font-weight: 600;
             color: #dcdde1;
             font-variant-numeric: tabular-nums;
@@ -171,17 +171,14 @@
         }
 
         .name {
-            /* DEUTLICH GRÖSSER SKALIERT: Erhöhter vh-Anteil und größerer Maximalwert */
-            font-size: clamp(1.1rem, 2.8vh, 2.2rem);
             font-weight: bold;
             color: #ffffff;
-            white-space: normal;
-            word-break: break-word;
+            white-space: nowrap; /* Kein Zeilenumbruch */
             line-height: 1.15;
         }
 
         .free-text {
-            font-size: clamp(0.8rem, 1.6vh, 1.2rem);
+            font-size: 0.75rem;
             color: #fbc531;
             background: rgba(251, 197, 49, 0.15);
             padding: 2px 6px;
@@ -368,6 +365,42 @@
                     }
                     gridEl.appendChild(card);
                 });
+
+                // Dynamische Schriftgrößen-Berechnung basierend auf dem längsten Namen
+                if (persons.length > 0 && gridEl.querySelector('.card')) {
+                    const sampleCard = gridEl.querySelector('.card');
+                    const availableWidth = sampleCard.clientWidth - 24;
+                    
+                    let longestName = '';
+                    persons.forEach(p => {
+                        if (p.name && p.name.length > longestName.length) {
+                            longestName = p.name;
+                        }
+                    });
+
+                    const testSpan = document.createElement('span');
+                    testSpan.style.visibility = 'hidden';
+                    testSpan.style.position = 'absolute';
+                    testSpan.style.whiteSpace = 'nowrap';
+                    testSpan.style.fontFamily = getComputedStyle(sampleCard).fontFamily;
+                    testSpan.style.fontWeight = 'bold';
+                    testSpan.textContent = longestName || 'Maximale Länge';
+                    document.body.appendChild(testSpan);
+
+                    let optimalSize = 1.0;
+                    for (let fs = 2.4; fs >= 0.5; fs -= 0.05) {
+                        testSpan.style.fontSize = fs + 'rem';
+                        if (testSpan.getBoundingClientRect().width <= availableWidth) {
+                            optimalSize = fs;
+                            break;
+                        }
+                    }
+                    document.body.removeChild(testSpan);
+
+                    document.querySelectorAll('.name').forEach(el => {
+                        el.style.fontSize = optimalSize + 'rem';
+                    });
+                }
 
             } catch (err) {
                 console.error('Verbindungsfehler:', err);
