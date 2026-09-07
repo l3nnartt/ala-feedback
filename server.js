@@ -183,7 +183,8 @@ if (process.env.MQTT_HOST) {
                 
                 const historyEntry = {
                     alarmId: alarmId,
-                    keyword: data.parameters.keyword_description || data.parameters.message || 'Einsatz',
+                    keyword: data.parameters.keyword || data.parameters.keyword_description || 'Einsatz',
+                    location: data.parameters.location_dest || data.parameters.street || 'Unbekannter Ort',
                     date: data.parameters.date || new Date().toLocaleDateString('de-DE'),
                     time: data.parameters.time || new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
                     total: parsedResponses.length,

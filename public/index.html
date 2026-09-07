@@ -292,6 +292,7 @@
                     <tr>
                         <th>Datum / Uhrzeit</th>
                         <th>Stichwort</th>
+                        <th>Einsatzort</th>
                         <th>Alarmiert</th>
                         <th>Zusagen</th>
                         <th>Absagen</th>
@@ -299,7 +300,7 @@
                     </tr>
                 </thead>
                 <tbody id="history-body">
-                    <tr><td colspan="6" style="color: #777; text-align: center; padding: 30px;">Keine Einsätze gespeichert</td></tr>
+                    <tr><td colspan="7" style="color: #777; text-align: center; padding: 30px;">Keine Einsätze gespeichert</td></tr>
                 </tbody>
             </table>
         </div>
@@ -358,7 +359,7 @@
                 tbody.innerHTML = '';
 
                 if (!history || history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" style="color: #777; text-align: center; padding: 30px;">Keine Einsätze gespeichert</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="7" style="color: #777; text-align: center; padding: 30px;">Keine Einsätze gespeichert</td></tr>';
                     return;
                 }
 
@@ -367,6 +368,7 @@
                     tr.innerHTML = `
                         <td>${item.date} - ${item.time}</td>
                         <td><strong>${item.keyword}</strong></td>
+                        <td>${item.location}</td>
                         <td>${item.total}</td>
                         <td style="color: #4cd137; font-weight: bold;">${item.yes}</td>
                         <td style="color: #ff4d4d; font-weight: bold;">${item.no}</td>
