@@ -7,7 +7,6 @@
     <style>
         :root {
             --bg-color: #121212;
-            --card-bg: #1e1e1e;
             --text-color: #ffffff;
             --green-color: #2e7d32;
             --red-color: #c62828;
@@ -100,6 +99,7 @@
         .badge-yes { color: #4cd137; }
         .badge-no { color: #ff4d4d; }
         .badge-other { color: #fbc531; }
+        .badge-total { color: #ffffff; }
 
         .functions-wrapper {
             justify-self: center;
@@ -108,11 +108,13 @@
             flex-wrap: wrap;
             justify-content: center;
         }
+
         .func-item {
             color: #ffffff;
             font-size: 0.95rem;
             font-weight: 500;
         }
+
         .func-count-active {
             color: #4cd137;
             font-weight: bold;
@@ -173,7 +175,7 @@
         .name {
             font-weight: bold;
             color: #ffffff;
-            white-space: nowrap; /* Kein Zeilenumbruch */
+            white-space: nowrap;
             line-height: 1.15;
         }
 
@@ -220,6 +222,8 @@
     <div id="alarm-content" style="display: none; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
         <div class="info-bar">
             <div class="counter-container">
+                <span>Gesamt: <strong id="count-total" class="badge-total">0</strong></span>
+                <span>|</span>
                 <span>Zusagen: <strong id="count-yes" class="badge-yes">0</strong></span>
                 <span>|</span>
                 <span>Absagen: <strong id="count-no" class="badge-no">0</strong></span>
@@ -265,6 +269,7 @@
                 const noAlarmEl = document.getElementById('no-alarm-message');
                 const gridEl = document.getElementById('person-grid');
                 
+                const countTotalEl = document.getElementById('count-total');
                 const countYesEl = document.getElementById('count-yes');
                 const countNoEl = document.getElementById('count-no');
                 const countOtherEl = document.getElementById('count-other');
@@ -326,14 +331,15 @@
                     if (isYes) countYes++; else if (isNo) countNo++; else countOther++;
                 });
 
+                countTotalEl.textContent = persons.length;
                 countYesEl.textContent = countYes;
                 countNoEl.textContent = countNo;
                 countOtherEl.textContent = countOther;
 
                 gridEl.innerHTML = '';
                 
-                const totalCount = persons.length;
                 let cols = 7;
+                const totalCount = persons.length;
                 if (totalCount === 0) cols = 1;
                 else if (totalCount <= 12) cols = 3;
                 else if (totalCount <= 24) cols = 4;
@@ -366,7 +372,6 @@
                     gridEl.appendChild(card);
                 });
 
-                // Dynamische Schriftgrößen-Berechnung basierend auf dem längsten Namen
                 if (persons.length > 0 && gridEl.querySelector('.card')) {
                     const sampleCard = gridEl.querySelector('.card');
                     const availableWidth = sampleCard.clientWidth - 24;
@@ -408,7 +413,7 @@
             }
         }
 
-        setInterval(updateDisplay, 5000);
+        setInterval(updateDisplay, 10000);
         updateDisplay();
     </script>
 </body>
