@@ -126,17 +126,16 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* Flexibles Grid das den Restplatz ausfüllt und skaliert */
         .grid {
             display: grid;
-            gap: 8px;
+            gap: 6px;
             flex: 1;
             overflow: hidden;
             align-content: start;
         }
 
         .card {
-            padding: 10px 14px;
+            padding: 8px 12px;
             border-radius: 6px;
             background-color: var(--default-color);
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
@@ -173,21 +172,22 @@
         }
 
         .name {
-            font-size: 1.05rem;
+            font-size: 0.95rem;
             font-weight: bold;
             color: #ffffff;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            /* Erlaubt Zeilenumbruch statt Abschneiden */
+            white-space: normal;
+            word-break: break-word;
+            line-height: 1.15;
         }
 
         .free-text {
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             color: #fbc531;
             background: rgba(251, 197, 49, 0.15);
             padding: 2px 6px;
             border-radius: 3px;
-            margin-top: 4px;
+            margin-top: 3px;
             font-style: italic;
             white-space: nowrap;
             overflow: hidden;
@@ -336,7 +336,6 @@
 
                 gridEl.innerHTML = '';
                 
-                // Dynamische Spalten- und Zeilenberechnung je nach Personenanzahl
                 const totalCount = persons.length;
                 let cols = 6;
                 if (totalCount <= 12) cols = 3;
