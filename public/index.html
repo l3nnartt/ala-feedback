@@ -15,12 +15,17 @@
             --default-color: #2b2b2b;
         }
 
-        body {
+        html, body {
+            height: 100vh;
+            overflow: hidden;
             font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
-            padding: 20px;
+            padding: 10px 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
         }
 
         header {
@@ -28,16 +33,16 @@
             justify-content: space-between;
             align-items: center;
             border-bottom: 2px solid #333;
-            padding-top: 20px;
-            padding-bottom: 30px;
-            margin-bottom: 25px;
+            padding: 10px 0;
+            margin-bottom: 15px;
             position: relative;
-            min-height: 90px;
+            min-height: 70px;
+            flex-shrink: 0;
         }
 
         h1 {
             margin: 0;
-            font-size: 1.8rem;
+            font-size: 1.6rem;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
@@ -52,18 +57,16 @@
         }
 
         .logo-container img {
-            max-height: 95px;
-            margin-top: 10px;
-            margin-bottom: 10px;
+            max-height: 65px;
             width: auto;
             object-fit: contain;
         }
 
         .status-badge {
-            padding: 8px 16px;
+            padding: 6px 14px;
             border-radius: 20px;
             font-weight: bold;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             background-color: #333;
         }
 
@@ -72,25 +75,25 @@
             color: #fff;
         }
 
-        /* ECHTE MITTE DURCH CSS-GRID */
         .info-bar {
             display: grid;
             grid-template-columns: 1fr auto 1fr;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             background-color: #1e1e1e;
-            padding: 15px 20px;
-            border-radius: 10px;
+            padding: 10px 15px;
+            border-radius: 8px;
             border-left: 5px solid var(--green-color);
-            gap: 20px;
+            gap: 15px;
+            flex-shrink: 0;
         }
 
         .counter-container {
             justify-self: start;
             display: flex;
             align-items: center;
-            gap: 12px;
-            font-size: 1.2rem;
+            gap: 10px;
+            font-size: 1.1rem;
             font-weight: 600;
         }
 
@@ -101,13 +104,13 @@
         .functions-wrapper {
             justify-self: center;
             display: flex;
-            gap: 15px;
+            gap: 12px;
             flex-wrap: wrap;
             justify-content: center;
         }
         .func-item {
             color: #ffffff;
-            font-size: 1.1rem;
+            font-size: 1rem;
             font-weight: 500;
         }
         .func-count-active {
@@ -117,29 +120,33 @@
 
         .time-counter {
             justify-self: end;
-            font-size: 1.4rem;
+            font-size: 1.2rem;
             font-weight: 600;
             color: #dcdde1;
             font-variant-numeric: tabular-nums;
         }
 
+        /* Flexibles Grid das den Restplatz ausfüllt und skaliert */
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 15px;
+            gap: 8px;
+            flex: 1;
+            overflow: hidden;
+            align-content: start;
         }
 
         .card {
-            padding: 15px 20px;
-            border-radius: 10px;
+            padding: 10px 14px;
+            border-radius: 6px;
             background-color: var(--default-color);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             display: flex;
             flex-direction: column;
             justify-content: center;
-            border-left: 8px solid #666;
-            transition: transform 0.2s ease;
-            min-height: 50px;
+            border-left-width: 6px;
+            border-left-style: solid;
+            border-left-color: #666;
+            min-height: 0;
         }
 
         .card.status-green {
@@ -150,7 +157,7 @@
         .card.status-red {
             border-left-color: #ff4d4d;
             background-color: #2e1111;
-            opacity: 0.4;
+            opacity: 0.5;
         }
 
         .card.status-yellow {
@@ -162,23 +169,29 @@
         .name-row {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
+            align-items: center;
         }
 
         .name {
-            font-size: 1.3rem;
+            font-size: 1.05rem;
             font-weight: bold;
             color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .free-text {
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             color: #fbc531;
             background: rgba(251, 197, 49, 0.15);
-            padding: 4px 8px;
-            border-radius: 4px;
-            margin-top: 6px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin-top: 4px;
             font-style: italic;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .no-alarm {
@@ -189,16 +202,11 @@
         }
 
         @media (max-width: 950px) {
-            header { flex-direction: column; gap: 15px; text-align: center; }
-            .logo-container { position: static; transform: none; margin: 20px 0; }
-            h1 { font-size: 1.5rem; }
-            .info-bar { 
-                display: flex; 
-                flex-direction: column; 
-                gap: 15px; 
-                text-align: center; 
-            }
-            .counter-container, .time-counter { justify-self: center; font-size: 1.1rem; }
+            header { flex-direction: column; gap: 10px; text-align: center; min-height: auto; }
+            .logo-container { position: static; transform: none; margin: 5px 0; }
+            h1 { font-size: 1.3rem; }
+            .info-bar { display: flex; flex-direction: column; gap: 10px; text-align: center; }
+            .counter-container, .time-counter { justify-self: center; font-size: 1rem; }
             .functions-wrapper { order: 3; width: 100%; }
         }
     </style>
@@ -213,7 +221,7 @@
         <div id="status" class="status-badge">Warten auf Einsatz...</div>
     </header>
 
-    <div id="alarm-content" style="display: none;">
+    <div id="alarm-content" style="display: none; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
         <div class="info-bar">
             <div class="counter-container">
                 <span>Zusagen: <strong id="count-yes" class="badge-yes">0</strong></span>
@@ -277,14 +285,23 @@
 
                 statusEl.textContent = 'EINSATZ AKTIV';
                 statusEl.classList.add('status-active');
-                contentEl.style.display = 'block';
+                contentEl.style.display = 'flex';
                 noAlarmEl.style.display = 'none';
                 alarmStartTime = data.startedAt;
 
                 funcContainer.innerHTML = '';
                 if (data.functions && data.functions.length > 0) {
-                    data.functions.forEach(f => {
+                    data.functions.forEach((f, index) => {
                         const count = parseInt(f.count) || 0;
+                        
+                        if (index > 0) {
+                            const sep = document.createElement('span');
+                            sep.className = 'func-item';
+                            sep.style.color = '#555';
+                            sep.textContent = '•';
+                            funcContainer.appendChild(sep);
+                        }
+
                         const span = document.createElement('span');
                         span.className = 'func-item';
                         
@@ -318,6 +335,16 @@
                 countOtherEl.textContent = countOther;
 
                 gridEl.innerHTML = '';
+                
+                // Dynamische Spalten- und Zeilenberechnung je nach Personenanzahl
+                const totalCount = persons.length;
+                let cols = 6;
+                if (totalCount <= 12) cols = 3;
+                else if (totalCount <= 24) cols = 4;
+                else if (totalCount <= 40) cols = 5;
+
+                gridEl.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+
                 persons.forEach(person => {
                     const card = document.createElement('div');
                     card.className = `card ${getCardStatusClass(person.state)}`;
