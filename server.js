@@ -1,23 +1,42 @@
-/**
- * Einsatz-Display Server für die Feuerwehr Leeste
- */
-
 require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const mqtt = require('mqtt');
 
-// === SETUP & CONFIGURATION ===
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-/**
- * Verbesserte Logging-Funktion
- * Nutzt nun Loglevel und schreibt asynchron in eine .log Datei, 
- * um den Server bei vielen Anfragen nicht zu blockieren.
- */
+const HISTORY_FILE = path.join(__dirname, 'history.json');
+
+function loadHistory() {
+    try {
+        if (fs.existsSync(HISTORY_FILE)) {
+            return JSON.parse(fs.readFileSync(HISTORY_FILE, 'utf8'));
+        }
+    } catch (err) {
+        writeLog('ERROR', 'Fehler beim Laden der history.json:', err.message);
+    }
+    return [];
+}
+
+function saveOrUpdateHistory(entry) {
+    try {
+        let history = loadHistory();
+        const index = history.findIndex(h => h.alarmId === entry.alarmId);
+        if (index !== -1) {
+            history[index] = entry;
+        } else {
+            history.unshift(entry);
+            if (history.length > 10) history = history.slice(0, 10);
+        }
+        fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+    } catch (err) {
+        writeLog('ERROR', 'Fehler beim Speichern der history.json:', err.message);
+    }
+}
+
 function writeLog(level, message, data = null) {
     const timestamp = new Date().toISOString();
     let logString = `[${timestamp}] [${level}] ${message}`;
@@ -26,31 +45,27 @@ function writeLog(level, message, data = null) {
         logString += ` ${typeof data === 'object' ? JSON.stringify(data, null, 2) : data}`;
     }
     
-    // Ausgabe in der Konsole je nach Level farblich/strukturiert
     if (level === 'ERROR') {
         console.error(logString);
     } else {
         console.log(logString);
     }
 
-    // In Datei server.log schreiben (asynchron)
     const logFilePath = path.join(__dirname, 'server.log');
     fs.appendFile(logFilePath, logString + '\n----------------------------------------\n', (err) => {
         if (err) console.error('[ERROR] Konnte nicht in server.log schreiben:', err);
     });
 }
 
-// === ALARM STATE ===
 let activeAlarm = {
     alarmId: null,
     startedAt: null,
     responses: [],
-    functions: [] // Neu hinzugefügt
+    functions: []
 };
 
 let resetTimeout = null;
 
-// === MQTT CLIENT ===
 if (process.env.MQTT_HOST) {
     const mqttUrl = `mqtts://${process.env.MQTT_HOST}:8883`;
     
@@ -73,7 +88,6 @@ if (process.env.MQTT_HOST) {
         });
     });
 
-    // Verbindungsabbrueche aufzeichnen
     mqttClient.on('offline', () => {
         writeLog('WARN', 'Verbindung zum MQTT-Broker verloren. Versuche Reconnect...');
     });
@@ -81,7 +95,6 @@ if (process.env.MQTT_HOST) {
     mqttClient.on('message', (topic, message) => {
         const payload = message.toString();
         
-        // Vollstaendige Daten bei Alarm immer als INFO wegschreiben
         writeLog('INFO', `Neue Nachricht auf [${topic}]. Rohdaten:`, payload);
         
         try {
@@ -106,7 +119,6 @@ if (process.env.MQTT_HOST) {
                     writeLog('INFO', `Update fuer aktiven Einsatz erhalten (ID: ${alarmId})`);
                 }
 
-                // === DATEN-VERARBEITUNG: PERSONEN ===
                 let parsedResponses = [];
                 let countYes = 0;
                 let countNo = 0;
@@ -152,7 +164,6 @@ if (process.env.MQTT_HOST) {
                     }
                 });
 
-                // === DATEN-VERARBEITUNG: FUNKTIONEN (NEU) ===
                 let functionsSummary = [];
                 if (data.parameters && data.parameters.function_all) {
                     const funcLines = data.parameters.function_all.split('\n');
@@ -168,9 +179,21 @@ if (process.env.MQTT_HOST) {
                 }
 
                 activeAlarm.responses = parsedResponses;
-                activeAlarm.functions = functionsSummary; // Funktionen speichern
+                activeAlarm.functions = functionsSummary;
                 
-                // Detaillierte Zusammenfassung loggen
+                const historyEntry = {
+                    alarmId: alarmId,
+                    keyword: data.parameters.keyword_description || data.parameters.message || 'Einsatz',
+                    date: data.parameters.date || new Date().toLocaleDateString('de-DE'),
+                    time: data.parameters.time || new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+                    total: parsedResponses.length,
+                    yes: countYes,
+                    no: countNo,
+                    other: countUnknown,
+                    timestamp: Date.now()
+                };
+                saveOrUpdateHistory(historyEntry);
+
                 writeLog('INFO', 'Auswertung abgeschlossen.', {
                     gesamtPersonen: parsedResponses.length,
                     zusagen: countYes,
@@ -193,10 +216,12 @@ if (process.env.MQTT_HOST) {
     writeLog('WARN', 'Kein MQTT_HOST in .env definiert. Server laeuft ohne MQTT-Anbindung.');
 }
 
-// === REST API ENDPUNKTE (Frontend-Schnittstellen) ===
-
 app.get('/api/current-alarm', (req, res) => {
     res.json(activeAlarm);
+});
+
+app.get('/api/history', (req, res) => {
+    res.json(loadHistory());
 });
 
 app.get('/api/test-log', (req, res) => {
@@ -204,7 +229,6 @@ app.get('/api/test-log', (req, res) => {
     res.status(200).json({ success: true, message: "Test-Log erfolgreich in server.log geschrieben." });
 });
 
-// === SERVER START ===
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     writeLog('INFO', `Webserver gestartet auf Port ${PORT}`);

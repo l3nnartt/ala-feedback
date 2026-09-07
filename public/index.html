@@ -192,11 +192,56 @@
             text-overflow: ellipsis;
         }
 
-        .no-alarm {
-            text-align: center;
-            padding: 100px 20px;
-            color: #777;
-            font-size: 1.8rem;
+        .idle-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            background: #181818;
+            border-radius: 8px;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .idle-title {
+            font-size: 1.3rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+            color: #aaa;
+            border-bottom: 1px solid #333;
+            padding-bottom: 8px;
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.95rem;
+        }
+
+        .history-table th, .history-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #2a2a2a;
+        }
+
+        .history-table th {
+            color: #888;
+            font-weight: 600;
+        }
+
+        .history-table tr:hover {
+            background-color: #222;
+        }
+
+        #screensaver-logo {
+            position: absolute;
+            width: 120px;
+            height: auto;
+            pointer-events: none;
+            opacity: 0.2;
+            transition: none;
         }
 
         @media (max-width: 950px) {
@@ -238,12 +283,58 @@
         <div id="person-grid" class="grid"></div>
     </div>
 
-    <div id="no-alarm-message" class="no-alarm">
-        Kein aktiver Einsatz
+    <div id="idle-wrapper" class="idle-container">
+        <img id="screensaver-logo" src="logo.png" alt="Logo Screensaver">
+        <div class="idle-title">Letzte Einsätze</div>
+        <div style="overflow-y: auto; flex: 1;">
+            <table class="history-table">
+                <thead>
+                    <tr>
+                        <th>Datum / Uhrzeit</th>
+                        <th>Stichwort</th>
+                        <th>Alarmiert</th>
+                        <th>Zusagen</th>
+                        <th>Absagen</th>
+                        <th>Sonstige</th>
+                    </tr>
+                </thead>
+                <tbody id="history-body">
+                    <tr><td colspan="6" style="color: #777; text-align: center; padding: 30px;">Keine Einsätze gespeichert</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>
         let alarmStartTime = null;
+        let saverX = 50, saverY = 50, saverSpeedX = 1.2, saverSpeedY = 1.2;
+        let saverInterval = null;
+
+        function startScreensaver() {
+            const saver = document.getElementById('screensaver-logo');
+            if (!saver) return;
+            if (saverInterval) clearInterval(saverInterval);
+
+            saverInterval = setInterval(() => {
+                const parent = saver.parentElement;
+                if (!parent) return;
+                const maxX = parent.clientWidth - saver.clientWidth;
+                const maxY = parent.clientHeight - saver.clientHeight;
+
+                saverX += saverSpeedX;
+                saverY += saverSpeedY;
+
+                if (saverX <= 0 || saverX >= maxX) saverSpeedX *= -1;
+                if (saverY <= 0 || saverY >= maxY) saverSpeedY *= -1;
+
+                saver.style.left = saverX + 'px';
+                saver.style.top = saverY + 'px';
+            }, 25);
+        }
+
+        function stopScreensaver() {
+            if (saverInterval) clearInterval(saverInterval);
+        }
 
         function getCardStatusClass(state) {
             if (state === 'YES' || state === 'HERE') return 'status-green';
@@ -259,6 +350,33 @@
             document.getElementById('timer').textContent = `${minutes}:${seconds}`;
         }, 1000);
 
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/history');
+                const history = await response.json();
+                const tbody = document.getElementById('history-body');
+                tbody.innerHTML = '';
+
+                if (!history || history.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="color: #777; text-align: center; padding: 30px;">Keine Einsätze gespeichert</td></tr>';
+                    return;
+                }
+
+                history.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${item.date} - ${item.time}</td>
+                        <td><strong>${item.keyword}</strong></td>
+                        <td>${item.total}</td>
+                        <td style="color: #4cd137; font-weight: bold;">${item.yes}</td>
+                        <td style="color: #ff4d4d; font-weight: bold;">${item.no}</td>
+                        <td style="color: #fbc531;">${item.other}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {}
+        }
+
         async function updateDisplay() {
             try {
                 const response = await fetch('/api/current-alarm');
@@ -266,7 +384,7 @@
 
                 const statusEl = document.getElementById('status');
                 const contentEl = document.getElementById('alarm-content');
-                const noAlarmEl = document.getElementById('no-alarm-message');
+                const idleEl = document.getElementById('idle-wrapper');
                 const gridEl = document.getElementById('person-grid');
                 
                 const countTotalEl = document.getElementById('count-total');
@@ -279,15 +397,18 @@
                     statusEl.textContent = 'Bereitschaft';
                     statusEl.classList.remove('status-active');
                     contentEl.style.display = 'none';
-                    noAlarmEl.style.display = 'block';
+                    idleEl.style.display = 'flex';
                     alarmStartTime = null;
+                    startScreensaver();
+                    loadHistory();
                     return;
                 }
 
+                stopScreensaver();
                 statusEl.textContent = 'EINSATZ AKTIV';
                 statusEl.classList.add('status-active');
                 contentEl.style.display = 'flex';
-                noAlarmEl.style.display = 'none';
+                idleEl.style.display = 'none';
                 alarmStartTime = data.startedAt;
 
                 funcContainer.innerHTML = '';
