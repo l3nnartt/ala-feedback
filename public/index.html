@@ -126,13 +126,11 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* Dynamisches Grid das den gesamten Resthöhen-Platz ausfüllt */
         .grid {
             display: grid;
-            gap: 8px; /* Etwas mehr Platz zwischen den Kacheln wirkt moderner */
+            gap: 8px;
             flex: 1;
             overflow: hidden;
-            /* Zeilen und Spalten werden nun komplett über JavaScript injiziert */
         }
 
         .card {
@@ -173,8 +171,8 @@
         }
 
         .name {
-            /* Dynamische Schriftgröße abhängig von der Bildschirmhöhe */
-            font-size: clamp(0.95rem, 2vh, 1.4rem);
+            /* DEUTLICH GRÖSSER SKALIERT: Erhöhter vh-Anteil und größerer Maximalwert */
+            font-size: clamp(1.1rem, 2.8vh, 2.2rem);
             font-weight: bold;
             color: #ffffff;
             white-space: normal;
@@ -183,8 +181,7 @@
         }
 
         .free-text {
-            /* Dynamische Schriftgröße für den Freitext */
-            font-size: clamp(0.75rem, 1.4vh, 1rem);
+            font-size: clamp(0.8rem, 1.6vh, 1.2rem);
             color: #fbc531;
             background: rgba(251, 197, 49, 0.15);
             padding: 2px 6px;
@@ -338,7 +335,6 @@
 
                 gridEl.innerHTML = '';
                 
-                // 1. Spaltenanzahl dynamisch bestimmen
                 const totalCount = persons.length;
                 let cols = 7;
                 if (totalCount === 0) cols = 1;
@@ -347,10 +343,8 @@
                 else if (totalCount <= 35) cols = 5;
                 else if (totalCount <= 48) cols = 6;
                 
-                // 2. Zeilenanzahl mathematisch berechnen
                 const rows = Math.ceil(totalCount / cols) || 1;
 
-                // 3. Grid zwingen, den Bildschirm exakt aufzuteilen (Zeilen strecken sich automatisch)
                 gridEl.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
                 gridEl.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
 
