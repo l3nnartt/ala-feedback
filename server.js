@@ -57,11 +57,23 @@ function writeLog(level, message, data = null) {
     });
 }
 
+function mergeResponses(oldResponses, newResponses) {
+    if (!oldResponses || oldResponses.length === 0) return newResponses || [];
+    if (!newResponses || newResponses.length === 0) return oldResponses;
+
+    const map = new Map();
+    oldResponses.forEach(r => map.set(r.name, r));
+    newResponses.forEach(r => map.set(r.name, r));
+    return Array.from(map.values());
+}
+
 let activeAlarm = {
     alarmId: null,
     startedAt: null,
     responses: [],
-    functions: []
+    functions: [],
+    keyword: '',
+    location: ''
 };
 
 let resetTimeout = null;
@@ -100,72 +112,91 @@ if (process.env.MQTT_HOST) {
         try {
             const data = JSON.parse(payload);
             
-            if (data.externalId && data.parameters && data.parameters.pluginmessage) {
+            if (data.externalId && data.parameters) {
                 const alarmId = data.externalId;
+                const isUpdate = (activeAlarm.alarmId === alarmId);
                 
-                if (activeAlarm.alarmId !== alarmId) {
+                if (!isUpdate) {
                     writeLog('ALARM', `Neuer Einsatz erkannt! Alarm-ID: ${alarmId}`);
                     activeAlarm.alarmId = alarmId;
                     activeAlarm.startedAt = Date.now();
+                    activeAlarm.responses = [];
+                    activeAlarm.functions = [];
+                    
+                    activeAlarm.keyword = data.parameters.keyword || data.parameters.keyword_description || 'Einsatz';
+                    activeAlarm.location = data.parameters.location_dest || data.parameters.street || 'Unbekannter Ort';
                     
                     if (resetTimeout) clearTimeout(resetTimeout);
                     
                     const THIRTY_MINUTES = 30 * 60 * 1000;
                     resetTimeout = setTimeout(() => {
                         writeLog('INFO', `Alarm (ID: ${activeAlarm.alarmId}) automatisch nach 30 Minuten zurückgesetzt. Display geht in Bereitschaft.`);
-                        activeAlarm = { alarmId: null, startedAt: null, responses: [], functions: [] };
+                        activeAlarm = { alarmId: null, startedAt: null, responses: [], functions: [], keyword: '', location: '' };
                     }, THIRTY_MINUTES);
                 } else {
-                    writeLog('INFO', `Update fuer aktiven Einsatz erhalten (ID: ${alarmId})`);
+                    writeLog('INFO', `Update fuer aktiven Einsatz erhalten (ID: ${alarmId})`);                    
+                    if (data.parameters.keyword || data.parameters.keyword_description) {
+                        activeAlarm.keyword = data.parameters.keyword || data.parameters.keyword_description;
+                    }
+                    if (data.parameters.location_dest || data.parameters.street) {
+                        activeAlarm.location = data.parameters.location_dest || data.parameters.street;
+                    }
                 }
 
                 let parsedResponses = [];
+                
+                if (data.parameters.pluginmessage) {
+                    const lines = data.parameters.pluginmessage.split('\n');
+                    const keywordsNo  = ['komme nicht', 'nein', 'absage', 'abwesend'];
+                    const keywordsYes = ['komme', 'ja', 'zusage', 'hier'];
+
+                    lines.forEach(line => {
+                        if (typeof line === 'string' && line.includes(':')) {
+                            const parts = line.split(':');
+                            const namePart = parts[0].trim();
+                            const statusPart = parts[1].trim().toLowerCase();
+
+                            if (!isNaN(statusPart) || namePart.toLowerCase().includes('funktionen') || namePart.toLowerCase().includes('gesamt')) {
+                                return;
+                            }
+
+                            let mappedState = 'UNKNOWN';
+                            
+                            if (keywordsNo.some(kw => statusPart.includes(kw))) {
+                                mappedState = 'NO';
+                            } else if (keywordsYes.some(kw => statusPart.includes(kw))) {
+                                mappedState = 'YES';
+                            }
+
+                            let freeText = parts[1].trim();
+                            if (statusPart.includes('frei') && data.parameters.feedbackFreeText) {
+                                freeText = data.parameters.feedbackFreeText;
+                            }
+
+                            parsedResponses.push({
+                                name: namePart,
+                                state: mappedState,
+                                functions: [], 
+                                free: freeText
+                            });
+                        }
+                    });
+                }
+
+                activeAlarm.responses = mergeResponses(activeAlarm.responses, parsedResponses);
+
                 let countYes = 0;
                 let countNo = 0;
                 let countUnknown = 0;
-                
-                const lines = data.parameters.pluginmessage.split('\n');
-                const keywordsNo  = ['komme nicht', 'nein', 'absage', 'abwesend'];
-                const keywordsYes = ['komme', 'ja', 'zusage', 'hier'];
 
-                lines.forEach(line => {
-                    if (typeof line === 'string' && line.includes(':')) {
-                        const parts = line.split(':');
-                        const namePart = parts[0].trim();
-                        const statusPart = parts[1].trim().toLowerCase();
-
-                        if (!isNaN(statusPart) || namePart.toLowerCase().includes('funktionen') || namePart.toLowerCase().includes('gesamt')) {
-                            return;
-                        }
-
-                        let mappedState = 'UNKNOWN';
-                        
-                        if (keywordsNo.some(kw => statusPart.includes(kw))) {
-                            mappedState = 'NO';
-                            countNo++;
-                        } else if (keywordsYes.some(kw => statusPart.includes(kw))) {
-                            mappedState = 'YES';
-                            countYes++;
-                        } else {
-                            countUnknown++;
-                        }
-
-                        let freeText = parts[1].trim();
-                        if (statusPart.includes('frei') && data.parameters.feedbackFreeText) {
-                            freeText = data.parameters.feedbackFreeText;
-                        }
-
-                        parsedResponses.push({
-                            name: namePart,
-                            state: mappedState,
-                            functions: [], 
-                            free: freeText
-                        });
-                    }
+                activeAlarm.responses.forEach(r => {
+                    if (r.state === 'YES') countYes++;
+                    else if (r.state === 'NO') countNo++;
+                    else countUnknown++;
                 });
 
-                let functionsSummary = [];
-                if (data.parameters && data.parameters.function_all) {
+                if (data.parameters.function_all) {
+                    let functionsSummary = [];
                     const funcLines = data.parameters.function_all.split('\n');
                     funcLines.forEach(line => {
                         if (line.includes(':') && !line.toLowerCase().includes('funktionen')) {
@@ -176,18 +207,16 @@ if (process.env.MQTT_HOST) {
                             });
                         }
                     });
+                    activeAlarm.functions = functionsSummary;
                 }
-
-                activeAlarm.responses = parsedResponses;
-                activeAlarm.functions = functionsSummary;
                 
                 const historyEntry = {
                     alarmId: alarmId,
-                    keyword: data.parameters.keyword || data.parameters.keyword_description || 'Einsatz',
-                    location: data.parameters.location_dest || data.parameters.street || 'Unbekannter Ort',
+                    keyword: activeAlarm.keyword,
+                    location: activeAlarm.location,
                     date: data.parameters.date || new Date().toLocaleDateString('de-DE'),
                     time: data.parameters.time || new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
-                    total: parsedResponses.length,
+                    total: activeAlarm.responses.length,
                     yes: countYes,
                     no: countNo,
                     other: countUnknown,
@@ -196,7 +225,7 @@ if (process.env.MQTT_HOST) {
                 saveOrUpdateHistory(historyEntry);
 
                 writeLog('INFO', 'Auswertung abgeschlossen.', {
-                    gesamtPersonen: parsedResponses.length,
+                    gesamtPersonen: activeAlarm.responses.length,
                     zusagen: countYes,
                     absagen: countNo,
                     sonstige: countUnknown
