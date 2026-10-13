@@ -9,6 +9,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const HISTORY_FILE = path.join(__dirname, 'history.json');
+const ACTIVE_ALARM_FILE = path.join(__dirname, 'active_alarm.json');
 
 function loadHistory() {
     try {
@@ -34,6 +35,25 @@ function saveOrUpdateHistory(entry) {
         fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
     } catch (err) {
         writeLog('ERROR', 'Fehler beim Speichern der history.json:', err.message);
+    }
+}
+
+function loadActiveAlarm() {
+    try {
+        if (fs.existsSync(ACTIVE_ALARM_FILE)) {
+            return JSON.parse(fs.readFileSync(ACTIVE_ALARM_FILE, 'utf8'));
+        }
+    } catch (err) {
+        writeLog('ERROR', 'Fehler beim Laden der active_alarm.json:', err.message);
+    }
+    return { alarmId: null, startedAt: null, responses: [], functions: [], keyword: '', location: '' };
+}
+
+function saveActiveAlarm(alarmData) {
+    try {
+        fs.writeFileSync(ACTIVE_ALARM_FILE, JSON.stringify(alarmData, null, 2));
+    } catch (err) {
+        writeLog('ERROR', 'Fehler beim Speichern der active_alarm.json:', err.message);
     }
 }
 
@@ -67,16 +87,27 @@ function mergeResponses(oldResponses, newResponses) {
     return Array.from(map.values());
 }
 
-let activeAlarm = {
-    alarmId: null,
-    startedAt: null,
-    responses: [],
-    functions: [],
-    keyword: '',
-    location: ''
-};
-
+let activeAlarm = loadActiveAlarm();
 let resetTimeout = null;
+
+// Timer nach Server-Neustart wiederherstellen
+if (activeAlarm.alarmId && activeAlarm.startedAt) {
+    const elapsed = Date.now() - activeAlarm.startedAt;
+    const THIRTY_MINUTES = 30 * 60 * 1000;
+    
+    if (elapsed < THIRTY_MINUTES) {
+        writeLog('INFO', `Stelle laufenden Einsatz nach Neustart wieder her (ID: ${activeAlarm.alarmId})`);
+        resetTimeout = setTimeout(() => {
+            writeLog('INFO', `Alarm (ID: ${activeAlarm.alarmId}) automatisch abgelaufen. Display geht in Bereitschaft.`);
+            activeAlarm = { alarmId: null, startedAt: null, responses: [], functions: [], keyword: '', location: '' };
+            saveActiveAlarm(activeAlarm);
+        }, THIRTY_MINUTES - elapsed);
+    } else {
+        writeLog('INFO', `Laufender Einsatz (ID: ${activeAlarm.alarmId}) ist waehrend der Offline-Zeit abgelaufen.`);
+        activeAlarm = { alarmId: null, startedAt: null, responses: [], functions: [], keyword: '', location: '' };
+        saveActiveAlarm(activeAlarm);
+    }
+}
 
 if (process.env.MQTT_HOST) {
     const mqttUrl = `mqtts://${process.env.MQTT_HOST}:8883`;
@@ -111,9 +142,9 @@ if (process.env.MQTT_HOST) {
         
         try {
             const data = JSON.parse(payload);
+            const alarmId = data.externalId || (data.parameters ? data.parameters.einsatznummer : null);
             
-            if (data.externalId && data.parameters) {
-                const alarmId = data.externalId;
+            if (alarmId && data.parameters) {
                 const isUpdate = (activeAlarm.alarmId === alarmId);
                 
                 if (!isUpdate) {
@@ -122,25 +153,24 @@ if (process.env.MQTT_HOST) {
                     activeAlarm.startedAt = Date.now();
                     activeAlarm.responses = [];
                     activeAlarm.functions = [];
-                    
-                    activeAlarm.keyword = data.parameters.keyword || data.parameters.keyword_description || 'Einsatz';
-                    activeAlarm.location = data.parameters.location_dest || data.parameters.street || 'Unbekannter Ort';
-                    
-                    if (resetTimeout) clearTimeout(resetTimeout);
-                    
-                    const THIRTY_MINUTES = 30 * 60 * 1000;
-                    resetTimeout = setTimeout(() => {
-                        writeLog('INFO', `Alarm (ID: ${activeAlarm.alarmId}) automatisch nach 30 Minuten zurückgesetzt. Display geht in Bereitschaft.`);
-                        activeAlarm = { alarmId: null, startedAt: null, responses: [], functions: [], keyword: '', location: '' };
-                    }, THIRTY_MINUTES);
                 } else {
                     writeLog('INFO', `Update fuer aktiven Einsatz erhalten (ID: ${alarmId})`);                    
-                    if (data.parameters.keyword || data.parameters.keyword_description) {
-                        activeAlarm.keyword = data.parameters.keyword || data.parameters.keyword_description;
-                    }
-                    if (data.parameters.location_dest || data.parameters.street) {
-                        activeAlarm.location = data.parameters.location_dest || data.parameters.street;
-                    }
+                }
+
+                activeAlarm.keyword = data.parameters.keyword || data.parameters.keyword_description || activeAlarm.keyword || 'Einsatz';
+                activeAlarm.location = data.parameters.location_dest || data.parameters.street || activeAlarm.location || 'Unbekannter Ort';
+
+                if (resetTimeout) clearTimeout(resetTimeout);
+                const THIRTY_MINUTES = 30 * 60 * 1000;
+                const elapsed = Date.now() - activeAlarm.startedAt;
+                const remainingTime = THIRTY_MINUTES - elapsed;
+
+                if (remainingTime > 0) {
+                    resetTimeout = setTimeout(() => {
+                        writeLog('INFO', `Alarm (ID: ${activeAlarm.alarmId}) automatisch exakt 30 Minuten nach Alarmeingang zurückgesetzt. Display geht in Bereitschaft.`);
+                        activeAlarm = { alarmId: null, startedAt: null, responses: [], functions: [], keyword: '', location: '' };
+                        saveActiveAlarm(activeAlarm);
+                    }, remainingTime);
                 }
 
                 let parsedResponses = [];
@@ -210,6 +240,8 @@ if (process.env.MQTT_HOST) {
                     activeAlarm.functions = functionsSummary;
                 }
                 
+                saveActiveAlarm(activeAlarm);
+
                 const historyEntry = {
                     alarmId: alarmId,
                     keyword: activeAlarm.keyword,
