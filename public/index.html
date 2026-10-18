@@ -255,6 +255,9 @@
     </style>
 </head>
 <body>
+    <div id="connection-warning" style="display: none; position: fixed; top: 20px; right: 20px; background-color: rgba(220, 53, 69, 0.9); color: white; padding: 15px 20px; border-radius: 8px; font-family: sans-serif; font-weight: bold; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+        ⚠️ Verbindung zum Backend unterbrochen seit <span id="disconnect-timer">0 Sek</span>
+    </div>
 
     <header>
         <h1>Einsatzkräfte auf Anfahrt</h1>
@@ -310,6 +313,8 @@
         let alarmStartTime = null;
         let saverX = 50, saverY = 50, saverSpeedX = 1.2, saverSpeedY = 1.2;
         let saverInterval = null;
+        let disconnectStartTime = null;
+        let disconnectInterval = null;
 
         function startScreensaver() {
             const saver = document.getElementById('screensaver-logo');
@@ -376,13 +381,51 @@
                     `;
                     tbody.appendChild(tr);
                 });
-            } catch (e) {}
+            } catch (e) {
+                console.warn("Konnte History nicht laden", e);
+            }
+        }
+        
+        function updateDisconnectTimer() {
+            if (!disconnectStartTime) return;
+            const elapsedSeconds = Math.floor((Date.now() - disconnectStartTime) / 1000);
+            let timeString = elapsedSeconds + " Sek";
+            if (elapsedSeconds > 60) {
+                const minutes = Math.floor(elapsedSeconds / 60);
+                const seconds = elapsedSeconds % 60;
+                timeString = minutes + " Min " + seconds + " Sek";
+            }
+            document.getElementById('disconnect-timer').innerText = timeString;
+        }
+
+        function handleConnectionError(error) {
+            console.warn("Verbindungsfehler:", error.message);
+            if (!disconnectStartTime) {
+                disconnectStartTime = Date.now();
+                document.getElementById('connection-warning').style.display = 'block';
+                disconnectInterval = setInterval(updateDisconnectTimer, 1000);
+            }
+        }
+
+        function handleConnectionRestored() {
+            if (disconnectStartTime) {
+                console.log("Verbindung wiederhergestellt!");
+                disconnectStartTime = null;
+                clearInterval(disconnectInterval);
+                document.getElementById('connection-warning').style.display = 'none';
+                document.getElementById('disconnect-timer').innerText = "0 Sek";
+            }
         }
 
         async function updateDisplay() {
             try {
                 const response = await fetch('/api/current-alarm');
+                if (!response.ok) {
+                    throw new Error(`Server antwortete mit Status: ${response.status}`);
+                }
+                
                 const data = await response.json();
+                handleConnectionRestored();
 
                 const statusEl = document.getElementById('status');
                 const contentEl = document.getElementById('alarm-content');
@@ -531,12 +574,11 @@
                 }
 
             } catch (err) {
-                console.error('Verbindungsfehler:', err);
-                setTimeout(() => { location.reload(); }, 10000);
+                handleConnectionError(err);
             }
         }
 
-        setInterval(updateDisplay, 10000);
+        setInterval(updateDisplay, 5000);
         updateDisplay();
     </script>
 </body>
