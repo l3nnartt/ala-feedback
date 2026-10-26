@@ -19,6 +19,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 const HISTORY_FILE = path.join(__dirname, 'history.json');
 const ACTIVE_ALARM_FILE = path.join(__dirname, 'active_alarm.json');
 
+const sseClients = new Set();
+
+function broadcastAlarm(alarmData) {
+    const dataString = `data: ${JSON.stringify(alarmData)}\n\n`;
+    for (const client of sseClients) {
+        client.write(dataString);
+    }
+}
+
 function safeWriteJsonFile(filePath, data) {
     const tempPath = `${filePath}.tmp`;
     fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8');
@@ -69,6 +78,7 @@ function saveActiveAlarm(alarmData) {
     } catch (err) {
         writeLog('ERROR', 'Fehler beim Speichern der active_alarm.json:', err.message);
     }
+    broadcastAlarm(alarmData);
 }
 
 function writeLog(level, message, data = null) {
@@ -300,6 +310,27 @@ if (process.env.MQTT_HOST) {
 } else {
     writeLog('WARN', 'Kein MQTT_HOST in .env definiert. Server laeuft ohne MQTT-Anbindung.');
 }
+
+app.get('/api/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    if (res.flushHeaders) res.flushHeaders();
+
+    res.write(`data: ${JSON.stringify(activeAlarm)}\n\n`);
+
+    sseClients.add(res);
+
+    req.on('close', () => {
+        sseClients.delete(res);
+    });
+});
+
+setInterval(() => {
+    for (const client of sseClients) {
+        client.write(': ping\n\n');
+    }
+}, 25000);
 
 app.get('/api/current-alarm', (req, res) => {
     res.json(activeAlarm);

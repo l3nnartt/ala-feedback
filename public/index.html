@@ -589,195 +589,210 @@
             }
         }
 
-        async function updateDisplay() {
+        async function fetchAlarm() {
             try {
                 const response = await fetch('/api/current-alarm');
                 if (!response.ok) {
                     handleConnectionError(new Error(`Server antwortete mit Status: ${response.status}`));
                     return;
                 }
-                
                 const data = await response.json();
-                handleConnectionRestored();
-
-                const statusEl = document.getElementById('status');
-                const contentEl = document.getElementById('alarm-content');
-                const idleEl = document.getElementById('idle-wrapper');
-                const gridEl = document.getElementById('person-grid');
-                
-                const countTotalEl = document.getElementById('count-total');
-                const countYesEl = document.getElementById('count-yes');
-                const countNoEl = document.getElementById('count-no');
-                const countOtherEl = document.getElementById('count-other');
-                const funcContainer = document.getElementById('functions-container');
-
-                if (!data || !data.alarmId) {
-                    statusEl.textContent = 'Bereitschaft';
-                    statusEl.classList.remove('status-active');
-                    contentEl.style.display = 'none';
-                    idleEl.style.display = 'flex';
-                    alarmStartTime = null;
-                    startScreensaver();
-                    await loadHistory();
-                    return;
-                }
-
-                stopScreensaver();
-                statusEl.textContent = 'EINSATZ AKTIV';
-                statusEl.classList.add('status-active');
-                contentEl.style.display = 'flex';
-                idleEl.style.display = 'none';
-                alarmStartTime = data.startedAt;
-
-                const missionInfoEl = document.getElementById('mission-info');
-                const missionKeywordEl = document.getElementById('mission-keyword');
-                const missionLocationEl = document.getElementById('mission-location');
-                const missionSepEl = document.getElementById('mission-sep');
-
-                if (data.keyword || data.location) {
-                    missionInfoEl.style.display = 'flex';
-                    missionKeywordEl.textContent = data.keyword || '';
-                    missionLocationEl.textContent = data.location || '';
-                    missionSepEl.style.display = (data.keyword && data.location) ? 'inline' : 'none';
-                } else {
-                    missionInfoEl.style.display = 'none';
-                }
-
-                funcContainer.innerHTML = '';
-                if (data.functions && data.functions.length > 0) {
-                    data.functions.forEach((f, index) => {
-                        const count = parseInt(f.count) || 0;
-                        
-                        if (index > 0) {
-                            const sep = document.createElement('span');
-                            sep.className = 'func-item';
-                            sep.style.color = '#555';
-                            sep.textContent = '•';
-                            funcContainer.appendChild(sep);
-                        }
-
-                        const span = document.createElement('span');
-                        span.className = 'func-item';
-                        span.textContent = `${f.label}: `;
-
-                        const countSpan = document.createElement('span');
-                        if (count >= 1) {
-                            countSpan.className = 'func-count-active';
-                        }
-                        countSpan.textContent = f.count;
-                        span.appendChild(countSpan);
-
-                        funcContainer.appendChild(span);
-                    });
-                }
-
-                let persons = data.responses || [];
-                
-                persons.sort((a, b) => {
-                    const isNoA = (a.state === 'NO' || a.state === 'ABSENT');
-                    const isNoB = (b.state === 'NO' || b.state === 'ABSENT');
-
-                    if (isNoA && !isNoB) return 1;
-                    if (!isNoA && isNoB) return -1;
-
-                    return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
-                });
-
-                let countYes = 0, countNo = 0, countOther = 0;
-                persons.forEach(p => {
-                    const isYes = (p.state === 'YES' || p.state === 'HERE');
-                    const isNo = (p.state === 'NO' || p.state === 'ABSENT');
-                    if (isYes) countYes++; else if (isNo) countNo++; else countOther++;
-                });
-
-                countTotalEl.textContent = String(persons.length);
-                countYesEl.textContent = String(countYes);
-                countNoEl.textContent = String(countNo);
-                countOtherEl.textContent = String(countOther);
-
-                gridEl.innerHTML = '';
-                
-                let cols = 7;
-                const totalCount = persons.length;
-                if (totalCount === 0) cols = 1;
-                else if (totalCount <= 12) cols = 3;
-                else if (totalCount <= 24) cols = 4;
-                else if (totalCount <= 35) cols = 5;
-                else if (totalCount <= 48) cols = 6;
-                
-                const rows = Math.ceil(totalCount / cols) || 1;
-
-                gridEl.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
-                gridEl.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
-
-                persons.forEach(person => {
-                    const card = document.createElement('div');
-                    card.className = `card ${getCardStatusClass(person.state)}`;
-                    
-                    const nameRow = document.createElement('div');
-                    nameRow.className = 'name-row';
-                    const nameEl = document.createElement('div');
-                    nameEl.className = 'name';
-                    nameEl.textContent = person.name || 'Unbekannt';
-                    nameRow.appendChild(nameEl);
-                    card.appendChild(nameRow);
-
-                    if (person.free && person.state === 'UNKNOWN') {
-                        const freeTextEl = document.createElement('div');
-                        freeTextEl.className = 'free-text';
-                        freeTextEl.textContent = `"${person.free}"`;
-                        card.appendChild(freeTextEl);
-                    }
-                    gridEl.appendChild(card);
-                });
-
-                if (persons.length > 0 && gridEl.querySelector('.card')) {
-                    const sampleCard = gridEl.querySelector('.card');
-                    const availableWidth = sampleCard.clientWidth - 24;
-                    const availableHeight = sampleCard.clientHeight;
-                    
-                    if (availableWidth > 0) {
-                        let longestName = '';
-                        persons.forEach(p => {
-                            if (p.name && p.name.length > longestName.length) {
-                                longestName = p.name;
-                            }
-                        });
-
-                        const testSpan = document.createElement('span');
-                        testSpan.style.visibility = 'hidden';
-                        testSpan.style.position = 'absolute';
-                        testSpan.style.whiteSpace = 'nowrap';
-                        testSpan.style.fontFamily = getComputedStyle(sampleCard).fontFamily;
-                        testSpan.style.fontWeight = 'bold';
-                        testSpan.textContent = longestName || 'Maximale Länge';
-                        document.body.appendChild(testSpan);
-
-                        let optimalSize = 1.0;
-                        for (let fs = 2.4; fs >= 0.5; fs -= 0.05) {
-                            testSpan.style.fontSize = fs + 'rem';
-                            const fitsWidth = testSpan.getBoundingClientRect().width <= availableWidth;
-                            const fitsHeight = availableHeight <= 0 || (testSpan.getBoundingClientRect().height * 1.5 <= availableHeight);
-                            if (fitsWidth && fitsHeight) {
-                                optimalSize = fs;
-                                break;
-                            }
-                        }
-                        document.body.removeChild(testSpan);
-
-                        document.querySelectorAll('.name').forEach(el => {
-                            el.style.fontSize = optimalSize + 'rem';
-                        });
-                    }
-                }
-
+                await renderDisplay(data);
             } catch (err) {
                 handleConnectionError(err);
             }
         }
 
-        setInterval(updateDisplay, 5000);
-        updateDisplay();
+        async function renderDisplay(data) {
+            handleConnectionRestored();
+
+            const statusEl = document.getElementById('status');
+            const contentEl = document.getElementById('alarm-content');
+            const idleEl = document.getElementById('idle-wrapper');
+            const gridEl = document.getElementById('person-grid');
+            
+            const countTotalEl = document.getElementById('count-total');
+            const countYesEl = document.getElementById('count-yes');
+            const countNoEl = document.getElementById('count-no');
+            const countOtherEl = document.getElementById('count-other');
+            const funcContainer = document.getElementById('functions-container');
+
+            if (!data || !data.alarmId) {
+                statusEl.textContent = 'Bereitschaft';
+                statusEl.classList.remove('status-active');
+                contentEl.style.display = 'none';
+                idleEl.style.display = 'flex';
+                alarmStartTime = null;
+                startScreensaver();
+                await loadHistory();
+                return;
+            }
+
+            stopScreensaver();
+            statusEl.textContent = 'EINSATZ AKTIV';
+            statusEl.classList.add('status-active');
+            contentEl.style.display = 'flex';
+            idleEl.style.display = 'none';
+            alarmStartTime = data.startedAt;
+
+            const missionInfoEl = document.getElementById('mission-info');
+            const missionKeywordEl = document.getElementById('mission-keyword');
+            const missionLocationEl = document.getElementById('mission-location');
+            const missionSepEl = document.getElementById('mission-sep');
+
+            if (data.keyword || data.location) {
+                missionInfoEl.style.display = 'flex';
+                missionKeywordEl.textContent = data.keyword || '';
+                missionLocationEl.textContent = data.location || '';
+                missionSepEl.style.display = (data.keyword && data.location) ? 'inline' : 'none';
+            } else {
+                missionInfoEl.style.display = 'none';
+            }
+
+            funcContainer.innerHTML = '';
+            if (data.functions && data.functions.length > 0) {
+                data.functions.forEach((f, index) => {
+                    const count = parseInt(f.count) || 0;
+                    
+                    if (index > 0) {
+                        const sep = document.createElement('span');
+                        sep.className = 'func-item';
+                        sep.style.color = '#555';
+                        sep.textContent = '•';
+                        funcContainer.appendChild(sep);
+                    }
+
+                    const span = document.createElement('span');
+                    span.className = 'func-item';
+                    span.textContent = `${f.label}: `;
+
+                    const countSpan = document.createElement('span');
+                    if (count >= 1) {
+                        countSpan.className = 'func-count-active';
+                    }
+                    countSpan.textContent = f.count;
+                    span.appendChild(countSpan);
+
+                    funcContainer.appendChild(span);
+                });
+            }
+
+            let persons = data.responses || [];
+            
+            persons.sort((a, b) => {
+                const isNoA = (a.state === 'NO' || a.state === 'ABSENT');
+                const isNoB = (b.state === 'NO' || b.state === 'ABSENT');
+
+                if (isNoA && !isNoB) return 1;
+                if (!isNoA && isNoB) return -1;
+
+                return (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase());
+            });
+
+            let countYes = 0, countNo = 0, countOther = 0;
+            persons.forEach(p => {
+                const isYes = (p.state === 'YES' || p.state === 'HERE');
+                const isNo = (p.state === 'NO' || p.state === 'ABSENT');
+                if (isYes) countYes++; else if (isNo) countNo++; else countOther++;
+            });
+
+            countTotalEl.textContent = String(persons.length);
+            countYesEl.textContent = String(countYes);
+            countNoEl.textContent = String(countNo);
+            countOtherEl.textContent = String(countOther);
+
+            gridEl.innerHTML = '';
+            
+            let cols = 7;
+            const totalCount = persons.length;
+            if (totalCount === 0) cols = 1;
+            else if (totalCount <= 12) cols = 3;
+            else if (totalCount <= 24) cols = 4;
+            else if (totalCount <= 35) cols = 5;
+            else if (totalCount <= 48) cols = 6;
+            
+            const rows = Math.ceil(totalCount / cols) || 1;
+
+            gridEl.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+            gridEl.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+
+            persons.forEach(person => {
+                const card = document.createElement('div');
+                card.className = `card ${getCardStatusClass(person.state)}`;
+                
+                const nameRow = document.createElement('div');
+                nameRow.className = 'name-row';
+                const nameEl = document.createElement('div');
+                nameEl.className = 'name';
+                nameEl.textContent = person.name || 'Unbekannt';
+                nameRow.appendChild(nameEl);
+                card.appendChild(nameRow);
+
+                if (person.free && person.state === 'UNKNOWN') {
+                    const freeTextEl = document.createElement('div');
+                    freeTextEl.className = 'free-text';
+                    freeTextEl.textContent = `"${person.free}"`;
+                    card.appendChild(freeTextEl);
+                }
+                gridEl.appendChild(card);
+            });
+
+            if (persons.length > 0 && gridEl.querySelector('.card')) {
+                const sampleCard = gridEl.querySelector('.card');
+                const availableWidth = sampleCard.clientWidth - 24;
+                const availableHeight = sampleCard.clientHeight;
+                
+                if (availableWidth > 0) {
+                    let longestName = '';
+                    persons.forEach(p => {
+                        if (p.name && p.name.length > longestName.length) {
+                            longestName = p.name;
+                        }
+                    });
+
+                    const testSpan = document.createElement('span');
+                    testSpan.style.visibility = 'hidden';
+                    testSpan.style.position = 'absolute';
+                    testSpan.style.whiteSpace = 'nowrap';
+                    testSpan.style.fontFamily = getComputedStyle(sampleCard).fontFamily;
+                    testSpan.style.fontWeight = 'bold';
+                    testSpan.textContent = longestName || 'Maximale Länge';
+                    document.body.appendChild(testSpan);
+
+                    let optimalSize = 1.0;
+                    for (let fs = 2.4; fs >= 0.5; fs -= 0.05) {
+                        testSpan.style.fontSize = fs + 'rem';
+                        const fitsWidth = testSpan.getBoundingClientRect().width <= availableWidth;
+                        const fitsHeight = availableHeight <= 0 || (testSpan.getBoundingClientRect().height * 1.5 <= availableHeight);
+                        if (fitsWidth && fitsHeight) {
+                            optimalSize = fs;
+                            break;
+                        }
+                    }
+                    document.body.removeChild(testSpan);
+
+                    document.querySelectorAll('.name').forEach(el => {
+                        el.style.fontSize = optimalSize + 'rem';
+                    });
+                }
+            }
+        }
+
+        function initSSE() {
+            if (!window.EventSource) return;
+            const evtSource = new EventSource('/api/stream');
+            evtSource.onmessage = async (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    await renderDisplay(data);
+                } catch (e) {}
+            };
+            evtSource.onerror = () => {};
+        }
+
+        initSSE();
+        setInterval(fetchAlarm, 10000);
+        fetchAlarm();
     </script>
 </body>
 </html>

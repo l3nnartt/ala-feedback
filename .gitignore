@@ -11,6 +11,9 @@ history.json
 active_alarm.json
 *.tmp
 
+# IDE files
+.idea/
+
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
