@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Einsatz Display - Feuerwehr Leeste</title>
+    <!--suppress CssUnusedSymbol -->
     <style>
         :root {
             --bg-color: #121212;
@@ -112,7 +113,7 @@
         .mission-keyword {
             color: #ff4d4d;
             font-weight: 800;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
         }
 
         .mission-sep {
@@ -550,21 +551,21 @@
                     tdLocation.textContent = item.location || '';
 
                     const tdTotal = document.createElement('td');
-                    tdTotal.textContent = item.total ?? 0;
+                    tdTotal.textContent = String(item.total ?? 0);
 
                     const tdYes = document.createElement('td');
                     tdYes.style.color = '#4cd137';
                     tdYes.style.fontWeight = 'bold';
-                    tdYes.textContent = item.yes ?? 0;
+                    tdYes.textContent = String(item.yes ?? 0);
 
                     const tdNo = document.createElement('td');
                     tdNo.style.color = '#ff4d4d';
                     tdNo.style.fontWeight = 'bold';
-                    tdNo.textContent = item.no ?? 0;
+                    tdNo.textContent = String(item.no ?? 0);
 
                     const tdOther = document.createElement('td');
                     tdOther.style.color = '#fbc531';
-                    tdOther.textContent = item.other ?? 0;
+                    tdOther.textContent = String(item.other ?? 0);
 
                     tr.append(tdDateTime, tdKeyword, tdLocation, tdTotal, tdYes, tdNo, tdOther);
                     tbody.appendChild(tr);
@@ -612,7 +613,8 @@
             try {
                 const response = await fetch('/api/current-alarm');
                 if (!response.ok) {
-                    throw new Error(`Server antwortete mit Status: ${response.status}`);
+                    handleConnectionError(new Error(`Server antwortete mit Status: ${response.status}`));
+                    return;
                 }
                 
                 const data = await response.json();
@@ -636,7 +638,7 @@
                     idleEl.style.display = 'flex';
                     alarmStartTime = null;
                     startScreensaver();
-                    loadHistory();
+                    await loadHistory();
                     return;
                 }
 
@@ -708,10 +710,10 @@
                     if (isYes) countYes++; else if (isNo) countNo++; else countOther++;
                 });
 
-                countTotalEl.textContent = persons.length;
-                countYesEl.textContent = countYes;
-                countNoEl.textContent = countNo;
-                countOtherEl.textContent = countOther;
+                countTotalEl.textContent = String(persons.length);
+                countYesEl.textContent = String(countYes);
+                countNoEl.textContent = String(countNo);
+                countOtherEl.textContent = String(countOther);
 
                 gridEl.innerHTML = '';
                 
