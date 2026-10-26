@@ -10,7 +10,6 @@
             --text-color: #ffffff;
             --green-color: #2e7d32;
             --red-color: #c62828;
-            --yellow-color: #f57f17;
             --default-color: #2b2b2b;
         }
 
@@ -25,6 +24,21 @@
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
+        }
+
+        .connection-warning {
+            display: none;
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(220, 53, 69, 0.9);
+            color: #ffffff;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-family: sans-serif;
+            font-weight: bold;
+            z-index: 9999;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
         }
 
         header {
@@ -72,6 +86,43 @@
         .status-active {
             background-color: var(--green-color);
             color: #fff;
+        }
+
+        .alarm-content {
+            display: none;
+            flex: 1;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .mission-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            background-color: #1e1e1e;
+            border-left: 5px solid var(--red-color);
+            padding: 8px 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+
+        .mission-keyword {
+            color: #ff4d4d;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+        }
+
+        .mission-sep {
+            color: #555;
+            font-weight: bold;
+        }
+
+        .mission-location {
+            color: #ffffff;
+            font-weight: 600;
         }
 
         .info-bar {
@@ -170,12 +221,15 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            overflow: hidden;
         }
 
         .name {
             font-weight: bold;
             color: #ffffff;
             white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
             line-height: 1.15;
         }
 
@@ -214,6 +268,11 @@
             padding-bottom: 8px;
         }
 
+        .history-scroll-container {
+            overflow-y: auto;
+            flex: 1;
+        }
+
         .history-table {
             width: 100%;
             border-collapse: collapse;
@@ -237,17 +296,22 @@
 
         #screensaver-logo {
             position: absolute;
-            width: 120px;
+            top: 0;
+            left: 0;
+            width: 130px;
             height: auto;
             pointer-events: none;
-            opacity: 0.2;
-            transition: none;
+            opacity: 0.28;
+            will-change: transform;
+            transition: filter 0.15s ease-out;
         }
 
         @media (max-width: 950px) {
             header { flex-direction: column; gap: 10px; text-align: center; min-height: auto; }
             .logo-container { position: static; transform: none; margin: 5px 0; }
             h1 { font-size: 1.3rem; }
+            .mission-header { flex-direction: column; gap: 4px; font-size: 1.1rem; }
+            .mission-sep { display: none; }
             .info-bar { display: flex; flex-direction: column; gap: 10px; text-align: center; }
             .counter-container, .time-counter { justify-self: center; font-size: 1rem; }
             .functions-wrapper { order: 3; width: 100%; }
@@ -255,7 +319,7 @@
     </style>
 </head>
 <body>
-    <div id="connection-warning" style="display: none; position: fixed; top: 20px; right: 20px; background-color: rgba(220, 53, 69, 0.9); color: white; padding: 15px 20px; border-radius: 8px; font-family: sans-serif; font-weight: bold; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+    <div id="connection-warning" class="connection-warning">
         ⚠️ Verbindung zum Backend unterbrochen seit <span id="disconnect-timer">0 Sek</span>
     </div>
 
@@ -267,7 +331,13 @@
         <div id="status" class="status-badge">Warten auf Einsatz...</div>
     </header>
 
-    <div id="alarm-content" style="display: none; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+    <div id="alarm-content" class="alarm-content">
+        <div id="mission-info" class="mission-header" style="display: none;">
+            <span id="mission-keyword" class="mission-keyword"></span>
+            <span id="mission-sep" class="mission-sep">•</span>
+            <span id="mission-location" class="mission-location"></span>
+        </div>
+
         <div class="info-bar">
             <div class="counter-container">
                 <span>Gesamt: <strong id="count-total" class="badge-total">0</strong></span>
@@ -289,7 +359,7 @@
     <div id="idle-wrapper" class="idle-container">
         <img id="screensaver-logo" src="logo.png" alt="Logo Screensaver">
         <div class="idle-title">Letzte Einsätze</div>
-        <div style="overflow-y: auto; flex: 1;">
+        <div class="history-scroll-container">
             <table class="history-table">
                 <thead>
                     <tr>
@@ -311,36 +381,110 @@
 
     <script>
         let alarmStartTime = null;
-        let saverX = 50, saverY = 50, saverSpeedX = 1.2, saverSpeedY = 1.2;
-        let saverInterval = null;
+        let saverX = null, saverY = null;
+        let saverSpeedX = 2.2, saverSpeedY = 1.5;
+        let saverAnimId = null;
+        let saverColorIdx = 0;
         let disconnectStartTime = null;
         let disconnectInterval = null;
+        let lastHistoryJson = '';
+
+        const dvdFilters = [
+            'none',
+            'hue-rotate(50deg) saturate(2.2)',
+            'hue-rotate(100deg) saturate(2.2)',
+            'hue-rotate(160deg) saturate(2.5)',
+            'hue-rotate(210deg) saturate(2.4)',
+            'hue-rotate(270deg) saturate(2.8)',
+            'hue-rotate(320deg) saturate(2.4)'
+        ];
 
         function startScreensaver() {
             const saver = document.getElementById('screensaver-logo');
-            if (!saver) return;
-            if (saverInterval) clearInterval(saverInterval);
+            if (!saver || saverAnimId) return;
 
-            saverInterval = setInterval(() => {
-                const parent = saver.parentElement;
-                if (!parent) return;
-                const maxX = parent.clientWidth - saver.clientWidth;
-                const maxY = parent.clientHeight - saver.clientHeight;
+            const parent = saver.parentElement;
+            if (!parent) return;
+
+            const logoW = saver.offsetWidth || 130;
+            const logoH = saver.offsetHeight || 65;
+            const maxX = Math.max(0, parent.clientWidth - logoW);
+            const maxY = Math.max(0, parent.clientHeight - logoH);
+
+            if (saverX === null || saverY === null) {
+                saverX = Math.floor(Math.random() * (maxX * 0.7));
+                saverY = Math.floor(Math.random() * (maxY * 0.7));
+                saverSpeedX = (Math.random() > 0.5 ? 1 : -1) * 2.2;
+                saverSpeedY = (Math.random() > 0.5 ? 1 : -1) * 1.5;
+            }
+
+            function animate() {
+                const curLogoW = saver.offsetWidth || 130;
+                const curLogoH = saver.offsetHeight || 65;
+                const limitX = Math.max(0, parent.clientWidth - curLogoW);
+                const limitY = Math.max(0, parent.clientHeight - curLogoH);
 
                 saverX += saverSpeedX;
                 saverY += saverSpeedY;
 
-                if (saverX <= 0 || saverX >= maxX) saverSpeedX *= -1;
-                if (saverY <= 0 || saverY >= maxY) saverSpeedY *= -1;
+                let hitX = false;
+                let hitY = false;
 
-                saver.style.left = saverX + 'px';
-                saver.style.top = saverY + 'px';
-            }, 25);
+                if (saverX >= limitX) {
+                    saverX = limitX;
+                    saverSpeedX = -Math.abs(saverSpeedX);
+                    hitX = true;
+                } else if (saverX <= 0) {
+                    saverX = 0;
+                    saverSpeedX = Math.abs(saverSpeedX);
+                    hitX = true;
+                }
+
+                if (saverY >= limitY) {
+                    saverY = limitY;
+                    saverSpeedY = -Math.abs(saverSpeedY);
+                    hitY = true;
+                } else if (saverY <= 0) {
+                    saverY = 0;
+                    saverSpeedY = Math.abs(saverSpeedY);
+                    hitY = true;
+                }
+
+                if (hitX || hitY) {
+                    saverColorIdx = (saverColorIdx + 1) % dvdFilters.length;
+                    saver.style.filter = dvdFilters[saverColorIdx];
+
+                    // Corner hit special effect
+                    if (hitX && hitY) {
+                        saver.style.filter = 'brightness(2.5) drop-shadow(0 0 15px #ffffff)';
+                        setTimeout(() => {
+                            if (saver) saver.style.filter = dvdFilters[saverColorIdx];
+                        }, 400);
+                    }
+                }
+
+                saver.style.transform = `translate3d(${saverX}px, ${saverY}px, 0)`;
+                saverAnimId = requestAnimationFrame(animate);
+            }
+
+            saverAnimId = requestAnimationFrame(animate);
         }
 
         function stopScreensaver() {
-            if (saverInterval) clearInterval(saverInterval);
+            if (saverAnimId) {
+                cancelAnimationFrame(saverAnimId);
+                saverAnimId = null;
+            }
         }
+
+        window.addEventListener('resize', () => {
+            const saver = document.getElementById('screensaver-logo');
+            if (!saver || !saver.parentElement || saverX === null) return;
+            const limitX = Math.max(0, saver.parentElement.clientWidth - (saver.offsetWidth || 130));
+            const limitY = Math.max(0, saver.parentElement.clientHeight - (saver.offsetHeight || 65));
+            saverX = Math.min(saverX, limitX);
+            saverY = Math.min(saverY, limitY);
+        });
 
         function getCardStatusClass(state) {
             if (state === 'YES' || state === 'HERE') return 'status-green';
@@ -350,35 +494,79 @@
 
         setInterval(() => {
             if (!alarmStartTime) return;
-            const elapsedSeconds = Math.floor((Date.now() - alarmStartTime) / 1000);
-            const minutes = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
+            const elapsedSeconds = Math.max(0, Math.floor((Date.now() - alarmStartTime) / 1000));
+            const hours = Math.floor(elapsedSeconds / 3600);
+            const minutes = String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, '0');
             const seconds = String(elapsedSeconds % 60).padStart(2, '0');
-            document.getElementById('timer').textContent = `${minutes}:${seconds}`;
+
+            if (hours > 0) {
+                const hoursStr = String(hours).padStart(2, '0');
+                document.getElementById('timer').textContent = `${hoursStr}:${minutes}:${seconds}`;
+            } else {
+                document.getElementById('timer').textContent = `${minutes}:${seconds}`;
+            }
         }, 1000);
 
         async function loadHistory() {
             try {
                 const response = await fetch('/api/history');
+                if (!response.ok) return;
                 const history = await response.json();
+                
+                const jsonStr = JSON.stringify(history);
+                if (jsonStr === lastHistoryJson) {
+                    return;
+                }
+                lastHistoryJson = jsonStr;
+
                 const tbody = document.getElementById('history-body');
                 tbody.innerHTML = '';
 
                 if (!history || history.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="7" style="color: #777; text-align: center; padding: 30px;">Keine Einsätze gespeichert</td></tr>';
+                    const emptyRow = document.createElement('tr');
+                    const emptyCell = document.createElement('td');
+                    emptyCell.colSpan = 7;
+                    emptyCell.style.color = '#777';
+                    emptyCell.style.textAlign = 'center';
+                    emptyCell.style.padding = '30px';
+                    emptyCell.textContent = 'Keine Einsätze gespeichert';
+                    emptyRow.appendChild(emptyCell);
+                    tbody.appendChild(emptyRow);
                     return;
                 }
 
                 history.forEach(item => {
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${item.date} - ${item.time}</td>
-                        <td><strong>${item.keyword}</strong></td>
-                        <td>${item.location}</td>
-                        <td>${item.total}</td>
-                        <td style="color: #4cd137; font-weight: bold;">${item.yes}</td>
-                        <td style="color: #ff4d4d; font-weight: bold;">${item.no}</td>
-                        <td style="color: #fbc531;">${item.other}</td>
-                    `;
+
+                    const tdDateTime = document.createElement('td');
+                    tdDateTime.textContent = `${item.date || ''} - ${item.time || ''}`;
+
+                    const tdKeyword = document.createElement('td');
+                    const strongKeyword = document.createElement('strong');
+                    strongKeyword.textContent = item.keyword || '';
+                    tdKeyword.appendChild(strongKeyword);
+
+                    const tdLocation = document.createElement('td');
+                    tdLocation.textContent = item.location || '';
+
+                    const tdTotal = document.createElement('td');
+                    tdTotal.textContent = item.total ?? 0;
+
+                    const tdYes = document.createElement('td');
+                    tdYes.style.color = '#4cd137';
+                    tdYes.style.fontWeight = 'bold';
+                    tdYes.textContent = item.yes ?? 0;
+
+                    const tdNo = document.createElement('td');
+                    tdNo.style.color = '#ff4d4d';
+                    tdNo.style.fontWeight = 'bold';
+                    tdNo.textContent = item.no ?? 0;
+
+                    const tdOther = document.createElement('td');
+                    tdOther.style.color = '#fbc531';
+                    tdOther.textContent = item.other ?? 0;
+
+                    tr.append(tdDateTime, tdKeyword, tdLocation, tdTotal, tdYes, tdNo, tdOther);
                     tbody.appendChild(tr);
                 });
             } catch (e) {
@@ -388,14 +576,14 @@
         
         function updateDisconnectTimer() {
             if (!disconnectStartTime) return;
-            const elapsedSeconds = Math.floor((Date.now() - disconnectStartTime) / 1000);
+            const elapsedSeconds = Math.max(0, Math.floor((Date.now() - disconnectStartTime) / 1000));
             let timeString = elapsedSeconds + " Sek";
-            if (elapsedSeconds > 60) {
+            if (elapsedSeconds >= 60) {
                 const minutes = Math.floor(elapsedSeconds / 60);
                 const seconds = elapsedSeconds % 60;
                 timeString = minutes + " Min " + seconds + " Sek";
             }
-            document.getElementById('disconnect-timer').innerText = timeString;
+            document.getElementById('disconnect-timer').textContent = timeString;
         }
 
         function handleConnectionError(error) {
@@ -411,9 +599,12 @@
             if (disconnectStartTime) {
                 console.log("Verbindung wiederhergestellt!");
                 disconnectStartTime = null;
-                clearInterval(disconnectInterval);
+                if (disconnectInterval) {
+                    clearInterval(disconnectInterval);
+                    disconnectInterval = null;
+                }
                 document.getElementById('connection-warning').style.display = 'none';
-                document.getElementById('disconnect-timer').innerText = "0 Sek";
+                document.getElementById('disconnect-timer').textContent = "0 Sek";
             }
         }
 
@@ -456,6 +647,20 @@
                 idleEl.style.display = 'none';
                 alarmStartTime = data.startedAt;
 
+                const missionInfoEl = document.getElementById('mission-info');
+                const missionKeywordEl = document.getElementById('mission-keyword');
+                const missionLocationEl = document.getElementById('mission-location');
+                const missionSepEl = document.getElementById('mission-sep');
+
+                if (data.keyword || data.location) {
+                    missionInfoEl.style.display = 'flex';
+                    missionKeywordEl.textContent = data.keyword || '';
+                    missionLocationEl.textContent = data.location || '';
+                    missionSepEl.style.display = (data.keyword && data.location) ? 'inline' : 'none';
+                } else {
+                    missionInfoEl.style.display = 'none';
+                }
+
                 funcContainer.innerHTML = '';
                 if (data.functions && data.functions.length > 0) {
                     data.functions.forEach((f, index) => {
@@ -471,9 +676,15 @@
 
                         const span = document.createElement('span');
                         span.className = 'func-item';
-                        
-                        const countClass = count >= 1 ? 'func-count-active' : '';
-                        span.innerHTML = `${f.label}: <span class="${countClass}">${f.count}</span>`;
+                        span.textContent = `${f.label}: `;
+
+                        const countSpan = document.createElement('span');
+                        if (count >= 1) {
+                            countSpan.className = 'func-count-active';
+                        }
+                        countSpan.textContent = f.count;
+                        span.appendChild(countSpan);
+
                         funcContainer.appendChild(span);
                     });
                 }
@@ -541,36 +752,41 @@
                 if (persons.length > 0 && gridEl.querySelector('.card')) {
                     const sampleCard = gridEl.querySelector('.card');
                     const availableWidth = sampleCard.clientWidth - 24;
+                    const availableHeight = sampleCard.clientHeight;
                     
-                    let longestName = '';
-                    persons.forEach(p => {
-                        if (p.name && p.name.length > longestName.length) {
-                            longestName = p.name;
-                        }
-                    });
+                    if (availableWidth > 0) {
+                        let longestName = '';
+                        persons.forEach(p => {
+                            if (p.name && p.name.length > longestName.length) {
+                                longestName = p.name;
+                            }
+                        });
 
-                    const testSpan = document.createElement('span');
-                    testSpan.style.visibility = 'hidden';
-                    testSpan.style.position = 'absolute';
-                    testSpan.style.whiteSpace = 'nowrap';
-                    testSpan.style.fontFamily = getComputedStyle(sampleCard).fontFamily;
-                    testSpan.style.fontWeight = 'bold';
-                    testSpan.textContent = longestName || 'Maximale Länge';
-                    document.body.appendChild(testSpan);
+                        const testSpan = document.createElement('span');
+                        testSpan.style.visibility = 'hidden';
+                        testSpan.style.position = 'absolute';
+                        testSpan.style.whiteSpace = 'nowrap';
+                        testSpan.style.fontFamily = getComputedStyle(sampleCard).fontFamily;
+                        testSpan.style.fontWeight = 'bold';
+                        testSpan.textContent = longestName || 'Maximale Länge';
+                        document.body.appendChild(testSpan);
 
-                    let optimalSize = 1.0;
-                    for (let fs = 2.4; fs >= 0.5; fs -= 0.05) {
-                        testSpan.style.fontSize = fs + 'rem';
-                        if (testSpan.getBoundingClientRect().width <= availableWidth) {
-                            optimalSize = fs;
-                            break;
+                        let optimalSize = 1.0;
+                        for (let fs = 2.4; fs >= 0.5; fs -= 0.05) {
+                            testSpan.style.fontSize = fs + 'rem';
+                            const fitsWidth = testSpan.getBoundingClientRect().width <= availableWidth;
+                            const fitsHeight = availableHeight <= 0 || (testSpan.getBoundingClientRect().height * 1.5 <= availableHeight);
+                            if (fitsWidth && fitsHeight) {
+                                optimalSize = fs;
+                                break;
+                            }
                         }
+                        document.body.removeChild(testSpan);
+
+                        document.querySelectorAll('.name').forEach(el => {
+                            el.style.fontSize = optimalSize + 'rem';
+                        });
                     }
-                    document.body.removeChild(testSpan);
-
-                    document.querySelectorAll('.name').forEach(el => {
-                        el.style.fontSize = optimalSize + 'rem';
-                    });
                 }
 
             } catch (err) {
