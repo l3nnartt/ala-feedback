@@ -5,11 +5,25 @@ const fs = require('fs');
 const mqtt = require('mqtt');
 
 const app = express();
+
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    next();
+});
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const HISTORY_FILE = path.join(__dirname, 'history.json');
 const ACTIVE_ALARM_FILE = path.join(__dirname, 'active_alarm.json');
+
+function safeWriteJsonFile(filePath, data) {
+    const tempPath = `${filePath}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf8');
+    fs.renameSync(tempPath, filePath);
+}
 
 function loadHistory() {
     try {
@@ -32,7 +46,7 @@ function saveOrUpdateHistory(entry) {
             history.unshift(entry);
             if (history.length > 10) history = history.slice(0, 10);
         }
-        fs.writeFileSync(HISTORY_FILE, JSON.stringify(history, null, 2));
+        safeWriteJsonFile(HISTORY_FILE, history);
     } catch (err) {
         writeLog('ERROR', 'Fehler beim Speichern der history.json:', err.message);
     }
@@ -51,7 +65,7 @@ function loadActiveAlarm() {
 
 function saveActiveAlarm(alarmData) {
     try {
-        fs.writeFileSync(ACTIVE_ALARM_FILE, JSON.stringify(alarmData, null, 2));
+        safeWriteJsonFile(ACTIVE_ALARM_FILE, alarmData);
     } catch (err) {
         writeLog('ERROR', 'Fehler beim Speichern der active_alarm.json:', err.message);
     }
@@ -72,6 +86,15 @@ function writeLog(level, message, data = null) {
     }
 
     const logFilePath = path.join(__dirname, 'server.log');
+    
+    try {
+        if (fs.existsSync(logFilePath) && fs.statSync(logFilePath).size > 5 * 1024 * 1024) {
+            const backupLogPath = path.join(__dirname, 'server.log.old');
+            if (fs.existsSync(backupLogPath)) fs.unlinkSync(backupLogPath);
+            fs.renameSync(logFilePath, backupLogPath);
+        }
+    } catch (e) {}
+
     fs.appendFile(logFilePath, logString + '\n----------------------------------------\n', (err) => {
         if (err) console.error('[ERROR] Konnte nicht in server.log schreiben:', err);
     });
@@ -90,7 +113,6 @@ function mergeResponses(oldResponses, newResponses) {
 let activeAlarm = loadActiveAlarm();
 let resetTimeout = null;
 
-// Timer nach Server-Neustart wiederherstellen
 if (activeAlarm.alarmId && activeAlarm.startedAt) {
     const elapsed = Date.now() - activeAlarm.startedAt;
     const THIRTY_MINUTES = 30 * 60 * 1000;
@@ -111,11 +133,12 @@ if (activeAlarm.alarmId && activeAlarm.startedAt) {
 
 if (process.env.MQTT_HOST) {
     const mqttUrl = `mqtts://${process.env.MQTT_HOST}:8883`;
+    const rejectUnauthorized = process.env.MQTT_REJECT_UNAUTHORIZED !== 'false';
     
     const mqttClient = mqtt.connect(mqttUrl, {
         username: process.env.MQTT_USER,
         password: process.env.MQTT_PASS,
-        rejectUnauthorized: false
+        rejectUnauthorized: rejectUnauthorized
     });
 
     mqttClient.on('connect', () => {
@@ -186,7 +209,7 @@ if (process.env.MQTT_HOST) {
                             const namePart = parts[0].trim();
                             const statusPart = parts[1].trim().toLowerCase();
 
-                            if (!isNaN(statusPart) || namePart.toLowerCase().includes('funktionen') || namePart.toLowerCase().includes('gesamt')) {
+                            if (!isNaN(Number(statusPart)) || namePart.toLowerCase().includes('funktionen') || namePart.toLowerCase().includes('gesamt')) {
                                 return;
                             }
 

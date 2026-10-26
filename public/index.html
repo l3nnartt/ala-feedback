@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Einsatz Display - Feuerwehr Leeste</title>
-    <!--suppress CssUnusedSymbol -->
     <style>
         :root {
             --bg-color: #121212;
@@ -380,6 +379,19 @@
         </div>
     </div>
 
+    <template id="templates" style="display:none;">
+        <div class="card status-green status-red status-yellow">
+            <div class="name-row">
+                <div class="name"></div>
+            </div>
+            <div class="free-text"></div>
+        </div>
+        <div class="func-item">
+            <span class="func-count-active"></span>
+        </div>
+        <div class="status-active"></div>
+    </template>
+
     <script>
         let alarmStartTime = null;
         let saverX = null, saverY = null;
@@ -455,7 +467,6 @@
                     saverColorIdx = (saverColorIdx + 1) % dvdFilters.length;
                     saver.style.filter = dvdFilters[saverColorIdx];
 
-                    // Corner hit special effect
                     if (hitX && hitY) {
                         saver.style.filter = 'brightness(2.5) drop-shadow(0 0 15px #ffffff)';
                         setTimeout(() => {
