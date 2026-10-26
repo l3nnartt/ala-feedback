@@ -303,7 +303,6 @@
             pointer-events: none;
             opacity: 0.28;
             will-change: transform;
-            transition: filter 0.15s ease-out;
         }
 
         @media (max-width: 950px) {
@@ -397,20 +396,9 @@
         let saverX = null, saverY = null;
         let saverSpeedX = 2.2, saverSpeedY = 1.5;
         let saverAnimId = null;
-        let saverColorIdx = 0;
         let disconnectStartTime = null;
         let disconnectInterval = null;
         let lastHistoryJson = '';
-
-        const dvdFilters = [
-            'none',
-            'hue-rotate(50deg) saturate(2.2)',
-            'hue-rotate(100deg) saturate(2.2)',
-            'hue-rotate(160deg) saturate(2.5)',
-            'hue-rotate(210deg) saturate(2.4)',
-            'hue-rotate(270deg) saturate(2.8)',
-            'hue-rotate(320deg) saturate(2.4)'
-        ];
 
         function startScreensaver() {
             const saver = document.getElementById('screensaver-logo');
@@ -440,39 +428,20 @@
                 saverX += saverSpeedX;
                 saverY += saverSpeedY;
 
-                let hitX = false;
-                let hitY = false;
-
                 if (saverX >= limitX) {
                     saverX = limitX;
                     saverSpeedX = -Math.abs(saverSpeedX);
-                    hitX = true;
                 } else if (saverX <= 0) {
                     saverX = 0;
                     saverSpeedX = Math.abs(saverSpeedX);
-                    hitX = true;
                 }
 
                 if (saverY >= limitY) {
                     saverY = limitY;
                     saverSpeedY = -Math.abs(saverSpeedY);
-                    hitY = true;
                 } else if (saverY <= 0) {
                     saverY = 0;
                     saverSpeedY = Math.abs(saverSpeedY);
-                    hitY = true;
-                }
-
-                if (hitX || hitY) {
-                    saverColorIdx = (saverColorIdx + 1) % dvdFilters.length;
-                    saver.style.filter = dvdFilters[saverColorIdx];
-
-                    if (hitX && hitY) {
-                        saver.style.filter = 'brightness(2.5) drop-shadow(0 0 15px #ffffff)';
-                        setTimeout(() => {
-                            if (saver) saver.style.filter = dvdFilters[saverColorIdx];
-                        }, 400);
-                    }
                 }
 
                 saver.style.transform = `translate3d(${saverX}px, ${saverY}px, 0)`;
